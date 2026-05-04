@@ -1595,9 +1595,9 @@
 
     document.getElementById('zoomOut').addEventListener('click', () => {
       const zoomSelect = document.getElementById('zoomSelect');
-      const options = Array.from(zoomSelect.options).filter(o => o.value !== 'fit').map(o => parseFloat(o.value));
-      const currentIdx = options.findIndex(v => v > state.zoom);
-      const prevIdx = currentIdx <= 0 ? 0 : currentIdx - 1;
+      const options = Array.from(zoomSelect.options).map(o => parseFloat(o.value));
+      const currentIdx = options.findIndex(v => v >= state.zoom);
+      const prevIdx = currentIdx > 0 ? currentIdx - 1 : 0;
       const prevZoom = options[prevIdx];
       state.zoom = prevZoom;
       updateZoom();
