@@ -1272,11 +1272,9 @@
 
       getNoteWeight(note) {
         if (note.type === 'rest') return note.duration;
-        // 增时线已经合并到 duration 中
-        // 有增时线的音符(duration >= 2 或 hasHighline)，按原始四分音符算宽度
-        if (note.hasHighline) return 1;
-        // duration >= 1 是四分或更长
-        if (note.duration >= 1) return 1;
+        // duration >= 1 的音符（四分、二分、全音符等）按实际时值占宽
+        // duration=1 占 1 份，duration=2 占 2 份，duration=3 占 3 份
+        if (note.duration >= 1) return note.duration;
         if (note.duration >= 0.5) return 0.7; // 八分音符组占 0.7 宽度
         if (note.duration >= 0.25) return 0.5; // 十六分音符组占 0.5 宽度
         return 0.4; // 三十二分
