@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>简谱编辑器 — JianPu Editor</title>
+  <style>
+    /* ===== CSS Variables ===== */
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --surface-light: #1e2a4a;
+      --accent: #e94560;
+      --accent-hover: #ff6b6b;
+      --text: #f5f5f5;
+      --text-muted: #a0a0a0;
+      --border: #2a3a5a;
+      --success: #4ecca3;
+      --warning: #f9a825;
+      --editor-bg: #0f3460;
+      --canvas-bg: #ffffff;
+      --shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ===== Header ===== */
+    .header {
+      height: 56px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+
+    .logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo::before {
+      content: "♪";
+      font-size: 24px;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex: 1;
+      justify-content: center;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn:active {
+      transform: scale(0.95);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--surface-light);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--border);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .btn-active {
+      background: var(--accent) !important;
+      color: white !important;
+    }
+
+    .status {
+      font-size: 13px;
+      color: var(--text-muted);
+      min-width: 120px;
+      text-align: right;
+    }
+
+    /* ===== Main Layout ===== */
+    .main {
+      display: flex;
+      height: calc(100vh - 56px);
+      overflow: hidden;
+    }
+
+    /* ===== Mobile Responsive ===== */
+    @media (max-width: 768px) {
+      .header {
+        height: 48px;
+        padding: 0 10px;
+        gap: 8px;
+      }
+
+      .logo {
+        font-size: 16px;
+      }
+
+      .logo::before {
+        font-size: 20px;
+      }
+
+      .toolbar {
+        gap: 4px;
+      }
+
+      .btn {
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+
+      .btn {
+        padding: 6px 8px;
+        font-size: 12px;
+        gap: 2px;
+      }
+
+      .btn .emoji {
+        display: inline;
+        font-size: 14px;
+      }
+
+      .btn .btn-text {
+        font-size: 11px;
+      }
+
+      .status {
+        display: none;
+      }
+
+      .main {
+        flex-direction: column;
+        height: calc(100vh - 48px);
+      }
+
+      .editor-panel {
+        width: 100% !important;
+        min-width: auto;
+        height: 42%;
+        min-height: 150px;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+      }
+
+      .editor {
+        width: 100% !important;
+        flex: 1;
+        font-size: 15px;
+        padding: 10px;
+        line-height: 1.6;
+        min-height: 80px;
+      }
+
+      .syntax-help {
+        width: 100% !important;
+        display: block;
+        max-height: 100px;
+        padding: 6px 8px;
+        font-size: 10px;
+        overflow-y: auto;
+        flex-shrink: 0;
+      }
+
+      .syntax-help h4 {
+        font-size: 11px;
+        margin-bottom: 3px;
+      }
+
+      .syntax-help table {
+        font-size: 10px;
+      }
+
+      .syntax-help td {
+        padding: 1px 3px;
+        line-height: 1.3;
+      }
+
+      .preview-panel {
+        width: 100% !important;
+        height: 58%;
+      }
+
+      .canvas-container {
+        width: 100% !important;
+        padding: 8px;
+      }
+      .zoom-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
+      }
+
+      .zoom-level {
+        font-size: 13px;
+        min-width: 50px;
+      }
+
+      #jianpuCanvas {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+      }
+    }
+
+    /* ===== Editor Panel ===== */
+    .editor-panel {
+      width: 40%;
+      min-width: 300px;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+    }
+
+    .panel-header {
+      padding: 12px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .editor {
+      flex: 1;
+      background: var(--editor-bg);
+      color: var(--text);
+      font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+      font-size: 15px;
+      line-height: 1.6;
+      padding: 16px;
+      border: none;
+      outline: none;
+      resize: none;
+      tab-size: 2;
+    }
+
+    .editor::placeholder {
+      color: #4a6fa5;
+    }
+
+    /* Syntax legend */
+    .syntax-help {
+      padding: 12px 16px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+      max-height: 160px;
+      overflow-y: auto;
+    }
+
+    .syntax-help h4 {
+      color: var(--accent);
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+
+    .syntax-help code {
+      background: var(--surface-light);
+      padding: 1px 4px;
+      border-radius: 3px;
+      color: var(--warning);
+      font-family: monospace;
+    }
+
+    .syntax-help table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 4px;
+    }
+
+    .syntax-help td {
+      padding: 2px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ===== Preview Panel ===== */
+    .preview-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--canvas-bg);
+      position: relative;
+    }
+
+    .preview-header {
+      padding: 12px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .zoom-controls {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .zoom-btn {
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--border);
+      background: var(--surface-light);
+      color: var(--text);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: manipulation;
+    }
+
+    .zoom-btn:hover {
+      background: var(--border);
+    }
+
+    .zoom-btn:active {
+      background: var(--accent);
+    }
+
+    .zoom-level {
+      min-width: 50px;
+      text-align: center;
+      font-size: 13px;
+    }
+
+    .canvas-container {
+      flex: 1;
+      overflow: auto;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 20px;
+      background: #f0f0f0;
+    }
+
+    #jianpuCanvas {
+      background: white;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+      max-width: 100%;
+    }
+
+    /* ===== Playback Progress ===== */
+    .playback-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--border);
+      display: none;
+    }
+
+    .playback-progress {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+
+    /* ===== Print Styles ===== */
+    @media print {
+      body {
+        background: white !important;
+        overflow: visible !important;
+        height: auto !important;
+      }
+
+      .header,
+      .editor-panel,
+      .preview-header,
+      .zoom-controls,
+      .playback-bar {
+        display: none !important;
+      }
+
+      .main {
+        display: block !important;
+        height: auto !important;
+      }
+
+      .preview-panel {
+        display: block !important;
+        background: white !important;
+        height: auto !important;
+      }
+
+      .canvas-container {
+        display: block !important;
+        padding: 0 !important;
+        background: white !important;
+        overflow: visible !important;
+      }
+
+      #jianpuCanvas {
+        box-shadow: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+      }
+    }
+
+    /* ===== Panel Toggle Buttons ===== */
+    .panel-toggle {
+      display: flex;
+      gap: 4px;
+    }
+
+    .toggle-btn {
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      background: var(--surface-light);
+      color: var(--text-muted);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      transition: all 0.2s;
+    }
+
+    .toggle-btn:hover {
+      background: var(--border);
+      color: var(--text);
+    }
+
+    .toggle-btn.active {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+
+    .panel-hidden {
+      display: none !important;
+    }
+
+    .editor-panel,
+    .preview-panel {
+      transition: flex 0.3s ease, height 0.3s ease;
+    }
+
+    /* ===== Scrollbars ===== */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--surface);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3a4a6a;
+    }
+  </style>
+</head>
+<body>
+    <!-- Header -->
+  <header class="header">
+    <div class="logo">简谱编辑器</div>
+    <div class="toolbar">
+      <button class="btn btn-primary" id="btnPlay" title="播放 (Space)">
+        <span class="emoji">▶</span> <span class="btn-text">播放</span>
+      </button>
+      <button class="btn btn-secondary" id="btnStop" title="停止 (Esc)">
+        <span class="emoji">⏹</span> <span class="btn-text">停止</span>
+      </button>
+      <button class="btn btn-secondary" id="btnPrint" title="打印 (Ctrl+P)">
+        <span class="emoji">🖨</span> <span class="btn-text">打印</span>
+      </button>
+      <button class="btn btn-secondary" id="btnExport" title="导出PNG">
+        <span class="emoji">💾</span> <span class="btn-text">导出</span>
+      </button>
+      <button class="btn btn-secondary" id="btnExample" title="加载示例">
+        <span class="emoji">📖</span> <span class="btn-text">示例</span>
+      </button>
+    </div>
+    <div class="panel-toggle">
+      <button class="toggle-btn active" id="toggleEditor" title="显示/隐藏编辑器">📝</button>
+      <button class="toggle-btn active" id="toggleSyntax" title="显示/隐藏语法提示">📋</button>
+      <button class="toggle-btn active" id="togglePreview" title="显示/隐藏预览">🎼</button>
+    </div>
+    <div class="status" id="status">就绪</div>
+  </header>
+
+  <!-- Main -->
+  <div class="main">
+    <!-- Editor Panel -->
+    <div class="editor-panel">
+      <div class="panel-header">
+        <span>📝 简谱源码</span>
+        <span style="font-size:12px;font-weight:400;">自动保存</span>
+      </div>
+      <textarea class="editor" id="editor" placeholder="在此输入简谱...
+
+试试输入示例：
+1 2 3 4 | 5 6 5 3 | 2 - - - ||
+^1 ^2 ^3 | ^5 ^6 ^5 | ^3 ^2 ^1 ||
+
+点击右侧「示例」按钮加载完整demo"></textarea>
+      <div class="syntax-help">
+        <h4>📋 标记语法速查</h4>
+        <table>
+          <tr><td><code>1-7</code></td><td>中音 do re mi fa sol la si</td></tr>
+          <tr><td><code>^1-^7</code></td><td>高音（上方加点）</td></tr>
+          <tr><td><code>_1-_7</code></td><td>低音（下方加点）</td></tr>
+          <tr><td><code>-</code></td><td>延长音/休止符</td></tr>
+          <tr><td><code>|</code></td><td>小节线</td></tr>
+          <tr><td><code>||</code></td><td>终止线（双竖线）</td></tr>
+          <tr><td><code>(12)</code></td><td>连音/圆滑线</td></tr>
+          <tr><td><code>1#</code></td><td>升半音</td></tr>
+          <tr><td><code>1b</code></td><td>降半音</td></tr>
+          <tr><td><code>1.</code></td><td>附点音符（时值×1.5）</td></tr>
+          <tr><td><code>1/</code></td><td>下划线（八分音符）</td></tr>
+          <tr><td><code>1//</code></td><td>双下划线（十六分音符）</td></tr>
+          <tr><td><code>1=</code></td><td>延长线下划线</td></tr>
+          <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
+          <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
+          <tr><td><code># 注释</code></td><td>行注释</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Preview Panel -->
+    <div class="preview-panel">
+      <div class="preview-header">
+        <span>🎼 预览</span>
+        <div class="zoom-controls">
+          <button class="zoom-btn" id="zoomOut">−</button>
+          <span class="zoom-level" id="zoomLevel">100%</span>
+          <button class="zoom-btn" id="zoomIn">+</button>
+          <button class="zoom-btn" id="zoomFit" title="适应宽度">⤢</button>
+        </div>
+      </div>
+      <div class="canvas-container" id="canvasContainer">
+        <canvas id="jianpuCanvas"></canvas>
+      </div>
+      <div class="playback-bar" id="playbackBar">
+        <div class="playback-progress" id="playbackProgress"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // 简谱编辑器核心代码
+    // ============================================================
+
+    // ===== 全局状态 =====
+    const state = {
+      zoom: 1.0,
+      isPlaying: false,
+      audioCtx: null,
+      currentSource: null,
+      playbackStartTime: 0,
+      playbackNotes: [],
+      scheduledNotes: [],
+      bpm: 120,
+      key: 'C',
+      timeSignature: [4, 4],
+    };
+
+    // ===== DOM 引用 =====
+    const editor = document.getElementById('editor');
+    const canvas = document.getElementById('jianpuCanvas');
+    const ctx = canvas.getContext('2d');
+    const status = document.getElementById('status');
+    const canvasContainer = document.getElementById('canvasContainer');
+
+    // ===== 音高映射 =====
+    // 简谱数字 1-7 对应音名（C大调）
+    const NOTE_FREQUENCIES = {
+      'C':  { '1': 261.63, '2': 293.66, '3': 329.63, '4': 349.23, '5': 392.00, '6': 440.00, '7': 493.88 },
+      'C#': { '1': 277.18, '2': 311.13, '3': 349.23, '4': 369.99, '5': 415.30, '6': 466.16, '7': 523.25 },
+      'D':  { '1': 293.66, '2': 329.63, '3': 369.99, '4': 392.00, '5': 440.00, '6': 493.88, '7': 554.37 },
+      'D#': { '1': 311.13, '2': 349.23, '3': 392.00, '4': 415.30, '5': 466.16, '6': 523.25, '7': 587.33 },
+      'E':  { '1': 329.63, '2': 369.99, '3': 415.30, '4': 440.00, '5': 493.88, '6': 554.37, '7': 622.25 },
+      'F':  { '1': 349.23, '2': 392.00, '3': 440.00, '4': 466.16, '5': 523.25, '6': 587.33, '7': 659.25 },
+      'F#': { '1': 369.99, '2': 415.30, '3': 466.16, '4': 493.88, '5': 554.37, '6': 622.25, '7': 698.46 },
+      'G':  { '1': 392.00, '2': 440.00, '3': 493.88, '4': 523.25, '5': 587.33, '6': 659.25, '7': 739.99 },
+      'G#': { '1': 415.30, '2': 466.16, '3': 523.25, '4': 554.37, '5': 622.25, '6': 698.46, '7': 783.99 },
+      'A':  { '1': 440.00, '2': 493.88, '3': 554.37, '4': 587.33, '5': 659.25, '6': 739.99, '7': 830.61 },
+      'A#': { '1': 466.16, '2': 523.25, '3': 587.33, '4': 622.25, '5': 698.46, '6': 783.99, '7': 880.00 },
+      'B':  { '1': 493.88, '2': 554.37, '3': 622.25, '4': 659.25, '5': 739.99, '6': 830.61, '7': 932.33 },
+    };
+
+    // ===== 解析器 =====
+    class JianPuParser {
+      constructor() {
+        this.tokens = [];
+      }
+
+      parse(text) {
+        const lines = text.split('\n');
+        const measures = [];
+        let currentMeasure = [];
+        let globalSettings = { bpm: 120, key: 'C', timeSignature: [4, 4], title: '' };
+
+        for (let line of lines) {
+          line = line.trim();
+          if (!line || line.startsWith('#')) continue;
+
+          // 全局设置
+          if (line.startsWith('%')) {
+            const match = line.match(/%([A-G]#?)=?(\d+)?\/?(\d+)?/);
+            if (match) {
+              globalSettings.key = match[1];
+              if (match[2]) globalSettings.timeSignature[0] = parseInt(match[2]);
+              if (match[3]) globalSettings.timeSignature[1] = parseInt(match[3]);
+            }
+            continue;
+          }
+
+          // BPM 设置
+          if (line.startsWith('@')) {
+            const bpm = parseInt(line.slice(1));
+            if (!isNaN(bpm)) globalSettings.bpm = bpm;
+            continue;
+          }
+
+          // 标题
+          if (line.startsWith('!')) {
+            globalSettings.title = line.slice(1).trim();
+            continue;
+          }
+
+          // 解析音符和小节
+          const tokens = this.tokenize(line);
+          for (const token of tokens) {
+            if (token.type === 'barline') {
+              if (currentMeasure.length > 0) {
+                measures.push({ notes: currentMeasure, isDouble: token.isDouble });
+                currentMeasure = [];
+              }
+            } else if (token.type === 'note' || token.type === 'rest') {
+              currentMeasure.push(token);
+            }
+          }
+        }
+
+        // 收尾小节
+        if (currentMeasure.length > 0) {
+          measures.push({ notes: currentMeasure, isDouble: true });
+        }
+
+        return { measures, settings: globalSettings };
+      }
+
+      tokenize(line) {
+        const tokens = [];
+        let i = 0;
+
+        while (i < line.length) {
+          const ch = line[i];
+
+          // 小节线
+          if (ch === '|') {
+            if (line[i + 1] === '|') {
+              tokens.push({ type: 'barline', isDouble: true });
+              i += 2;
+            } else {
+              tokens.push({ type: 'barline', isDouble: false });
+              i++;
+            }
+            continue;
+          }
+
+          // 空格跳过
+          if (ch === ' ' || ch === '\t') {
+            i++;
+            continue;
+          }
+
+          // 音符
+          if (/[0-7]/.test(ch)) {
+            const note = this.parseNote(line, i);
+            tokens.push(note.token);
+            i = note.nextIndex;
+            continue;
+          }
+
+          // 休止符
+          if (ch === '-') {
+            let duration = 1;
+            let hasDot = false;
+            let underlines = 0;
+            let i2 = i + 1;
+
+            while (i2 < line.length && (line[i2] === '.' || line[i2] === '/' || line[i2] === '=')) {
+              if (line[i2] === '.') hasDot = true;
+              if (line[i2] === '/') underlines++;
+              if (line[i2] === '=') underlines += 2;
+              i2++;
+            }
+
+            // 计算时值
+            duration = this.calculateDuration(underlines, hasDot);
+
+            tokens.push({
+              type: 'rest',
+              duration: duration,
+              underlines: underlines,
+              hasDot: hasDot
+            });
+            i = i2;
+            continue;
+          }
+
+          i++;
+        }
+
+        return tokens;
+      }
+
+      parseNote(line, start) {
+        let i = start;
+        let octave = 0; // 0=中音, 1=高音, -1=低音
+        let accidental = ''; // '', '#', 'b'
+        let hasDot = false;
+        let underlines = 0;
+        let isTie = false;
+
+        // 前缀：^ 高音, _ 低音
+        while (i < line.length && (line[i] === '^' || line[i] === '_')) {
+          if (line[i] === '^') octave++;
+          if (line[i] === '_') octave--;
+          i++;
+        }
+
+        // 数字
+        const digit = line[i];
+        i++;
+
+        // 后缀
+        while (i < line.length) {
+          const ch = line[i];
+          if (ch === '#') { accidental = '#'; i++; }
+          else if (ch === 'b') { accidental = 'b'; i++; }
+          else if (ch === '.') { hasDot = true; i++; }
+          else if (ch === '/') { underlines++; i++; }
+          else if (ch === '=') { underlines += 2; i++; }
+          else if (ch === '~') { isTie = true; i++; }
+          else break;
+        }
+
+        const duration = this.calculateDuration(underlines, hasDot);
+
+        return {
+          token: {
+            type: 'note',
+            digit: digit,
+            octave: octave,
+            accidental: accidental,
+            duration: duration,
+            underlines: underlines,
+            hasDot: hasDot,
+            isTie: isTie
+          },
+          nextIndex: i
+        };
+      }
+
+      calculateDuration(underlines, hasDot) {
+        let duration = 1;
+        if (underlines >= 2) duration = 0.25;
+        else if (underlines === 1) duration = 0.5;
+        if (hasDot) duration *= 1.5;
+        return duration;
+      }
+    }
+
+    // ===== 渲染器 =====
+    class JianPuRenderer {
+      constructor(canvas, ctx) {
+        this.canvas = canvas;
+        this.ctx = ctx;
+        this.config = {
+          noteSize: 28,
+          lineHeight: 80,
+          measureGap: 40,
+          noteGap: 36,
+          marginX: 60,
+          marginY: 80,
+          titleSize: 28,
+          subtitleSize: 14,
+          dotRadius: 3,
+          underlineHeight: 3,
+          barlineWidth: 2,
+        };
+      }
+
+      render(data) {
+        const { measures, settings } = data;
+        if (measures.length === 0) {
+          this.renderEmpty();
+          return;
+        }
+
+        // A4 纸尺寸: 210mm x 297mm
+        // 打印分辨率 96 DPI: 794 x 1123 pixels
+        // 留边距后可用宽度约 720px
+        const A4_WIDTH = 720;
+        const A4_HEIGHT = 1050;
+        const MARGIN_X = 40;
+        const MARGIN_Y = 50;
+
+        // 根据音符数量计算每行最多几个音符
+        const maxNotesPerLine = Math.floor((A4_WIDTH - MARGIN_X * 2) / 45);
+        const lines = this.layoutMeasures(measures, maxNotesPerLine);
+
+        // 计算总高度
+        const lineHeight = 50;
+        const titleHeight = settings.title ? 40 : 0;
+        const totalHeight = MARGIN_Y * 2 + titleHeight + lines.length * lineHeight + 20;
+
+        // 设置 canvas 尺寸 - 使用 A4 比例
+        const scale = 1.5; // 高清渲染
+        canvas.width = A4_WIDTH * scale;
+        canvas.height = Math.max(totalHeight, 400) * scale;
+        canvas.style.width = '100%';
+        canvas.style.maxWidth = A4_WIDTH + 'px';
+        canvas.style.height = 'auto';
+        ctx.scale(scale, scale);
+
+        // 背景
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, A4_WIDTH, Math.max(totalHeight, 400));
+
+        // 标题
+        let y = MARGIN_Y;
+        if (settings.title) {
+          ctx.fillStyle = '#1a1a2e';
+          ctx.font = `bold 22px "Segoe UI", "PingFang SC", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillText(settings.title, A4_WIDTH / 2, y);
+          y += 35;
+        }
+
+        // 调号拍号
+        ctx.fillStyle = '#555';
+        ctx.font = `12px "Segoe UI", "PingFang SC", sans-serif`;
+        ctx.textAlign = 'left';
+        const keyText = `${settings.key}大调  ${settings.timeSignature[0]}/${settings.timeSignature[1]}拍  ♩=${settings.bpm}`;
+        ctx.fillText(keyText, MARGIN_X, y);
+        y += 25;
+
+        // 渲染每行
+        for (const line of lines) {
+          this.renderLine(ctx, line, MARGIN_X, y, A4_WIDTH - MARGIN_X * 2);
+          y += lineHeight;
+        }
+
+        // 存储设置供播放使用
+        state.bpm = settings.bpm;
+        state.key = settings.key;
+        state.timeSignature = settings.timeSignature;
+
+        // 收集可播放的音符
+        this.collectPlaybackNotes(measures, settings);
+      }
+
+      layoutMeasures(measures, maxPerLine) {
+        const lines = [];
+        let currentLine = [];
+        let currentCount = 0;
+
+        for (const measure of measures) {
+          const noteCount = measure.notes.filter(n => n.type === 'note').length;
+          if (currentCount + noteCount > maxPerLine && currentLine.length > 0) {
+            lines.push(currentLine);
+            currentLine = [measure];
+            currentCount = noteCount;
+          } else {
+            currentLine.push(measure);
+            currentCount += noteCount;
+          }
+        }
+
+        if (currentLine.length > 0) {
+          lines.push(currentLine);
+        }
+
+        return lines;
+      }
+
+      renderLine(ctx, lineMeasures, x, y, availableWidth) {
+        // 计算总音符数
+        let totalNotes = 0;
+        for (const measure of lineMeasures) {
+          totalNotes += measure.notes.length;
+        }
+
+        const noteWidth = availableWidth / Math.max(totalNotes, 1);
+        let currentX = x;
+
+        for (let m = 0; m < lineMeasures.length; m++) {
+          const measure = lineMeasures[m];
+          const isLast = m === lineMeasures.length - 1;
+
+          // 渲染小节内音符
+          for (let i = 0; i < measure.notes.length; i++) {
+            const note = measure.notes[i];
+            const noteX = currentX + noteWidth / 2;
+
+            if (note.type === 'note') {
+              this.renderNote(ctx, note, noteX, y);
+            } else if (note.type === 'rest') {
+              this.renderRest(ctx, note, noteX, y);
+            }
+
+            currentX += noteWidth;
+          }
+
+          // 小节线
+          ctx.strokeStyle = '#1a1a2e';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(currentX, y - 25);
+          ctx.lineTo(currentX, y + 15);
+          ctx.stroke();
+
+          // 终止双竖线
+          if (measure.isDouble && isLast) {
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(currentX + 3, y - 25);
+            ctx.lineTo(currentX + 3, y + 15);
+            ctx.stroke();
+
+            // 粗线
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(currentX + 8, y - 25);
+            ctx.lineTo(currentX + 8, y + 15);
+            ctx.stroke();
+          }
+        }
+      }
+
+      renderNote(ctx, note, x, y) {
+        const size = 20; // 缩小字号适配 A4
+        const dotRadius = 2.5;
+        const underlineHeight = 2;
+
+        ctx.fillStyle = '#1a1a2e';
+        ctx.font = `bold ${size}px "Segoe UI", "PingFang SC", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // 计算Y偏移（高低音）
+        let yOffset = 0;
+        if (note.octave > 0) yOffset = -10 * note.octave;
+        if (note.octave < 0) yOffset = 10 * Math.abs(note.octave);
+
+        const noteY = y + yOffset;
+
+        // 升降号
+        let xOffset = 0;
+        if (note.accidental) {
+          ctx.font = `${size * 0.7}px "Segoe UI", sans-serif`;
+          ctx.fillText(note.accidental === '#' ? '♯' : '♭', x - size * 0.5, noteY);
+          xOffset = size * 0.2;
+        }
+
+        // 数字
+        ctx.font = `bold ${size}px "Segoe UI", "PingFang SC", sans-serif`;
+        ctx.fillText(note.digit, x + xOffset, noteY);
+
+        // 高音点（上方）
+        if (note.octave > 0) {
+          for (let i = 0; i < note.octave; i++) {
+            ctx.beginPath();
+            ctx.arc(x + xOffset, noteY - size * 0.5 - i * 8, dotRadius, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // 低音点（下方）
+        if (note.octave < 0) {
+          for (let i = 0; i < Math.abs(note.octave); i++) {
+            ctx.beginPath();
+            ctx.arc(x + xOffset, noteY + size * 0.5 + i * 8, dotRadius, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // 附点
+        if (note.hasDot) {
+          ctx.beginPath();
+          ctx.arc(x + size * 0.5 + xOffset, noteY + 1, dotRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // 下划线（减时线）
+        if (note.underlines > 0) {
+          ctx.strokeStyle = '#1a1a2e';
+          ctx.lineWidth = underlineHeight;
+          const lineY = noteY + size * 0.4 + 2;
+          const lineWidth = size * 0.6;
+
+          for (let i = 0; i < note.underlines; i++) {
+            ctx.beginPath();
+            ctx.moveTo(x - lineWidth / 2 + xOffset, lineY + i * 5);
+            ctx.lineTo(x + lineWidth / 2 + xOffset, lineY + i * 5);
+            ctx.stroke();
+          }
+        }
+      }
+
+      renderRest(ctx, note, x, y) {
+        const size = 20;
+
+        ctx.fillStyle = '#1a1a2e';
+        ctx.font = `${size}px "Segoe UI", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // 休止符用特殊符号或横线表示
+        if (note.duration >= 1) {
+          // 全休止符/二分休止符 - 用横线表示
+          ctx.strokeStyle = '#1a1a2e';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(x - 8, y);
+          ctx.lineTo(x + 8, y);
+          ctx.stroke();
+        } else {
+          // 短休止符 - 用点或特殊标记
+          ctx.beginPath();
+          ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // 下划线
+        if (note.underlines > 0) {
+          ctx.strokeStyle = '#1a1a2e';
+          ctx.lineWidth = 2;
+          const lineY = y + size * 0.4 + 2;
+          const lineWidth = size * 0.6;
+
+          for (let i = 0; i < note.underlines; i++) {
+            ctx.beginPath();
+            ctx.moveTo(x - lineWidth / 2, lineY + i * 5);
+            ctx.lineTo(x + lineWidth / 2, lineY + i * 5);
+            ctx.stroke();
+          }
+        }
+      }
+
+      renderEmpty() {
+        const A4_WIDTH = 720;
+        const scale = 1.5;
+
+        canvas.width = A4_WIDTH * scale;
+        canvas.height = 400 * scale;
+        canvas.style.width = '100%';
+        canvas.style.maxWidth = A4_WIDTH + 'px';
+        canvas.style.height = 'auto';
+        ctx.scale(scale, scale);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, A4_WIDTH, 400);
+
+        ctx.fillStyle = '#ccc';
+        ctx.font = '18px "Segoe UI", "PingFang SC", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('🎵 在左侧编辑器输入简谱，此处将实时预览', A4_WIDTH / 2, 200 - 20);
+        ctx.font = '14px "Segoe UI", sans-serif';
+        ctx.fillText('例如: 1 2 3 4 | 5 6 5 3 | 2 - - - ||', A4_WIDTH / 2, 200 + 20);
+      }
+
+      collectPlaybackNotes(measures, settings) {
+        const notes = [];
+        let time = 0;
+        // 四分音符时长 = 60秒 / BPM
+        // 例如 BPM=100, 四分音符 = 0.6秒
+        const quarterDuration = 60 / settings.bpm;
+
+        for (const measure of measures) {
+          for (const note of measure.notes) {
+            // note.duration: 1=四分音符, 0.5=八分音符, 0.25=十六分音符, 1.5=附点四分音符
+            const duration = note.duration * quarterDuration;
+
+            if (note.type === 'note') {
+              const freq = this.getFrequency(note, settings.key);
+              notes.push({
+                frequency: freq,
+                startTime: time,
+                duration: duration,
+                digit: note.digit,
+                octave: note.octave
+              });
+            }
+            time += duration;
+          }
+        }
+
+        state.playbackNotes = notes;
+        state.totalDuration = time;
+      }
+
+      getFrequency(note, key) {
+        const baseFreqs = NOTE_FREQUENCIES[key] || NOTE_FREQUENCIES['C'];
+        let freq = baseFreqs[note.digit] || 440;
+
+        // 八度调整
+        if (note.octave > 0) {
+          freq *= Math.pow(2, note.octave);
+        } else if (note.octave < 0) {
+          freq /= Math.pow(2, Math.abs(note.octave));
+        }
+
+        // 升降号
+        if (note.accidental === '#') {
+          freq *= Math.pow(2, 1/12);
+        } else if (note.accidental === 'b') {
+          freq /= Math.pow(2, 1/12);
+        }
+
+        return freq;
+      }
+    }
+
+    // ===== 音频播放器 =====
+    class JianPuPlayer {
+      constructor() {
+        this.audioCtx = null;
+        this.isPlaying = false;
+        this.currentSources = [];
+      }
+
+      initAudio() {
+        if (!this.audioCtx) {
+          this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (this.audioCtx.state === 'suspended') {
+          this.audioCtx.resume();
+        }
+      }
+
+      play(notes, totalDuration) {
+        this.initAudio();
+        this.stop();
+
+        const now = this.audioCtx.currentTime;
+        this.isPlaying = true;
+        state.playbackStartTime = now;
+        state.isPlaying = true;
+
+        // 播放进度条
+        document.getElementById('playbackBar').style.display = 'block';
+
+        for (const note of notes) {
+          if (note.frequency <= 0) continue;
+
+          const osc = this.audioCtx.createOscillator();
+          const gain = this.audioCtx.createGain();
+
+          osc.connect(gain);
+          gain.connect(this.audioCtx.destination);
+
+          osc.type = 'sine';
+          osc.frequency.value = note.frequency;
+
+          const startTime = now + note.startTime;
+          const endTime = startTime + note.duration;
+
+          // ADSR 包络
+          gain.gain.setValueAtTime(0, startTime);
+          gain.gain.linearRampToValueAtTime(0.3, startTime + 0.02); // Attack
+          gain.gain.setValueAtTime(0.3, endTime - 0.05); // Sustain
+          gain.gain.linearRampToValueAtTime(0, endTime); // Release
+
+          osc.start(startTime);
+          osc.stop(endTime);
+
+          this.currentSources.push({ osc, gain });
+        }
+
+        // 进度更新
+        this.updateProgress(totalDuration);
+
+        // 播放结束
+        setTimeout(() => {
+          this.stop();
+        }, totalDuration * 1000 + 100);
+      }
+
+      updateProgress(totalDuration) {
+        const progressBar = document.getElementById('playbackProgress');
+        const update = () => {
+          if (!this.isPlaying) return;
+          const elapsed = this.audioCtx.currentTime - state.playbackStartTime;
+          const progress = Math.min((elapsed / totalDuration) * 100, 100);
+          progressBar.style.width = progress + '%';
+
+          if (progress < 100) {
+            requestAnimationFrame(update);
+          }
+        };
+        requestAnimationFrame(update);
+      }
+
+      stop() {
+        this.isPlaying = false;
+        state.isPlaying = false;
+
+        for (const source of this.currentSources) {
+          try {
+            source.osc.stop();
+            source.osc.disconnect();
+            source.gain.disconnect();
+          } catch (e) {}
+        }
+        this.currentSources = [];
+
+        document.getElementById('playbackBar').style.display = 'none';
+        document.getElementById('playbackProgress').style.width = '0%';
+        status.textContent = '就绪';
+      }
+    }
+
+    // ===== 初始化 =====
+    const parser = new JianPuParser();
+    const renderer = new JianPuRenderer(canvas, ctx);
+    const player = new JianPuPlayer();
+
+    // 渲染函数
+    function render() {
+      const text = editor.value;
+      const data = parser.parse(text);
+      renderer.render(data);
+    }
+
+    // 事件监听
+    editor.addEventListener('input', () => {
+      render();
+      // 保存到 localStorage
+      localStorage.setItem('jianpu_editor_content', editor.value);
+    });
+
+    // 播放按钮
+    document.getElementById('btnPlay').addEventListener('click', () => {
+      if (state.isPlaying) {
+        player.stop();
+        document.getElementById('btnPlay').textContent = '▶ 播放';
+        document.getElementById('btnPlay').classList.remove('btn-active');
+        return;
+      }
+
+      if (state.playbackNotes.length === 0) {
+        status.textContent = '没有可播放的音符';
+        return;
+      }
+
+      player.play(state.playbackNotes, state.totalDuration);
+      document.getElementById('btnPlay').textContent = '⏸ 暂停';
+      document.getElementById('btnPlay').classList.add('btn-active');
+      status.textContent = `播放中... ♩=${state.bpm}`;
+    });
+
+    // 停止按钮
+    document.getElementById('btnStop').addEventListener('click', () => {
+      player.stop();
+      document.getElementById('btnPlay').textContent = '▶ 播放';
+      document.getElementById('btnPlay').classList.remove('btn-active');
+    });
+
+    // 打印按钮
+    document.getElementById('btnPrint').addEventListener('click', () => {
+      window.print();
+    });
+
+    // 导出PNG
+    document.getElementById('btnExport').addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.download = 'jianpu_' + new Date().toISOString().slice(0, 10) + '.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      status.textContent = '已导出PNG';
+      setTimeout(() => status.textContent = '就绪', 2000);
+    });
+
+    // 示例按钮
+    document.getElementById('btnExample').addEventListener('click', () => {
+      const example = `!小星星
+%C=4/4
+@100
+
+1 1 5 5 | 6 6 5 - | 4 4 3 3 | 2 2 1 - |
+5 5 4 4 | 3 3 2 - | 5 5 4 4 | 3 3 2 - |
+1 1 5 5 | 6 6 5 - | 4 4 3 3 | 2 2 1 - ||`;
+      editor.value = example;
+      render();
+      status.textContent = '已加载示例';
+    });
+
+    // 缩放控制
+    document.getElementById('zoomIn').addEventListener('click', () => {
+      state.zoom = Math.min(state.zoom + 0.1, 2.0);
+      updateZoom();
+    });
+
+    document.getElementById('zoomOut').addEventListener('click', () => {
+      state.zoom = Math.max(state.zoom - 0.1, 0.5);
+      updateZoom();
+    });
+
+    document.getElementById('zoomFit').addEventListener('click', () => {
+      const containerWidth = canvasContainer.clientWidth - 40;
+      const canvasWidth = parseInt(canvas.style.width);
+      state.zoom = containerWidth / canvasWidth;
+      updateZoom();
+    });
+
+    function updateZoom() {
+      canvas.style.transform = `scale(${state.zoom})`;
+      canvas.style.transformOrigin = 'top center';
+      document.getElementById('zoomLevel').textContent = Math.round(state.zoom * 100) + '%';
+    }
+
+    // 键盘快捷键
+    document.addEventListener('keydown', (e) => {
+      if (e.target === editor) return; // 编辑时不触发
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        document.getElementById('btnPlay').click();
+      }
+      if (e.code === 'Escape') {
+        document.getElementById('btnStop').click();
+      }
+      if (e.ctrlKey && e.key === 'p') {
+        e.preventDefault();
+        window.print();
+      }
+    });
+
+    // 面板切换按钮
+    const panelStates = {
+      editor: true,
+      syntax: true,
+      preview: true
+    };
+
+    function updatePanelVisibility() {
+      const editorPanel = document.querySelector('.editor-panel');
+      const syntaxHelp = document.querySelector('.syntax-help');
+      const previewPanel = document.querySelector('.preview-panel');
+      const main = document.querySelector('.main');
+
+      // 编辑器
+      if (panelStates.editor) {
+        editorPanel.classList.remove('panel-hidden');
+        document.getElementById('toggleEditor').classList.add('active');
+      } else {
+        editorPanel.classList.add('panel-hidden');
+        document.getElementById('toggleEditor').classList.remove('active');
+      }
+
+      // 语法提示
+      if (panelStates.syntax) {
+        syntaxHelp.classList.remove('panel-hidden');
+        document.getElementById('toggleSyntax').classList.add('active');
+      } else {
+        syntaxHelp.classList.add('panel-hidden');
+        document.getElementById('toggleSyntax').classList.remove('active');
+      }
+
+      // 预览区
+      if (panelStates.preview) {
+        previewPanel.classList.remove('panel-hidden');
+        document.getElementById('togglePreview').classList.add('active');
+      } else {
+        previewPanel.classList.add('panel-hidden');
+        document.getElementById('togglePreview').classList.remove('active');
+      }
+
+      // 如果只有一个面板显示，让它占满空间
+      const visiblePanels = [panelStates.editor, panelStates.preview].filter(Boolean).length;
+      if (visiblePanels === 1) {
+        main.style.flexDirection = 'column';
+        if (panelStates.editor && !panelStates.preview) {
+          editorPanel.style.height = 'calc(100vh - 56px)';
+          editorPanel.style.flex = '1';
+        }
+        if (panelStates.preview && !panelStates.editor) {
+          previewPanel.style.height = 'calc(100vh - 56px)';
+          previewPanel.style.flex = '1';
+        }
+      } else {
+        editorPanel.style.height = '';
+        editorPanel.style.flex = '';
+        previewPanel.style.height = '';
+        previewPanel.style.flex = '';
+      }
+
+      // 重新渲染
+      setTimeout(() => render(), 100);
+    }
+
+    document.getElementById('toggleEditor').addEventListener('click', () => {
+      panelStates.editor = !panelStates.editor;
+      updatePanelVisibility();
+    });
+
+    document.getElementById('toggleSyntax').addEventListener('click', () => {
+      panelStates.syntax = !panelStates.syntax;
+      updatePanelVisibility();
+    });
+
+    document.getElementById('togglePreview').addEventListener('click', () => {
+      panelStates.preview = !panelStates.preview;
+      updatePanelVisibility();
+    });
+
+    // 恢复上次内容
+    const saved = localStorage.getItem('jianpu_editor_content');
+    if (saved) {
+      editor.value = saved;
+    }
+
+    // 初始渲染
+    render();
+
+    // 窗口大小变化
+    window.addEventListener('resize', () => {
+      render();
+    });
+  </script>
+</body>
+</html>
