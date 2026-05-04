@@ -740,10 +740,6 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
           <span class="btn-text">示例</span>
         </button>
-        <button class="btn btn-secondary" id="btnCopy" title="复制源码到剪贴板">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-          <span class="btn-text">复制</span>
-        </button>
       </div>
       <div class="status" id="status"><span class="status-dot"></span>就绪</div>
     </div>
@@ -771,10 +767,16 @@
     <div class="editor-panel">
       <div class="panel-header">
         <span><span class="panel-header-icon">✎</span>简谱源码</span>
-        <span style="font-size:11px;font-weight:500;color:var(--text-muted);display:flex;align-items:center;gap:4px;">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-          自动保存
-        </span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn btn-secondary" id="btnCopy" title="复制源码到剪贴板" style="padding:4px 10px;font-size:12px;border-radius:12px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:3px;"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+            复制
+          </button>
+          <span style="font-size:11px;font-weight:500;color:var(--text-muted);display:flex;align-items:center;gap:4px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            自动保存
+          </span>
+        </div>
       </div>
       <textarea class="editor" id="editor" placeholder="在此输入简谱...
 
