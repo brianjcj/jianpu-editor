@@ -1276,28 +1276,28 @@
 
       groupShortNotes(notes) {
         // 将相邻的短音符分组，用于连线下划线
-        // 支持混合分组：前8后16、前16后8等组合
+        // 核心规则：同一组内所有音符共享最下面的连线
+        // 有 underlines=1 的音符参与时，组最多2个音符（2个八分=1拍）
+        // 只有 underlines>=2 的音符时，组最多4个音符（4个十六分=1拍）
         const groups = [];
         let currentGroup = null;
 
         for (let i = 0; i < notes.length; i++) {
           const note = notes[i];
           if (note.type === 'note' && note.underlines > 0) {
-            if (!currentGroup || !this.canJoinGroup(currentGroup, note)) {
+            if (!currentGroup || !this.canJoinGroup(currentGroup, note, notes)) {
               // 开始新组
               if (currentGroup) groups.push(currentGroup);
               currentGroup = {
                 indices: [i],
-                underlines: note.underlines,
-                startIdx: i,
-                endIdx: i
+                notes: [note],
+                maxUnderlines: note.underlines
               };
             } else {
               // 继续当前组
               currentGroup.indices.push(i);
-              currentGroup.endIdx = i;
-              // 更新组的underlines为最大值（用于决定画几条线）
-              currentGroup.underlines = Math.max(currentGroup.underlines, note.underlines);
+              currentGroup.notes.push(note);
+              currentGroup.maxUnderlines = Math.max(currentGroup.maxUnderlines, note.underlines);
             }
           } else {
             // 遇到非短音符，结束当前组
@@ -1312,32 +1312,32 @@
         return groups;
       }
 
-      canJoinGroup(group, note) {
-        // 检查音符是否可以加入当前组
-        // 基本规则：相邻短音符可以混合分组
-        // 八分音符：最多2个时值单位
-        // 十六分音符：最多4个时值单位
+      canJoinGroup(group, note, allNotes) {
+        // 检查组内总时值是否已满
+        const currentUnits = this.calculateGroupUnits(group);
+        const noteUnits = this.getNoteUnits(note);
 
-        const totalUnits = this.calculateGroupUnits(group) + this.getNoteUnits(note);
-        const maxUnits = group.underlines >= 2 ? 4 : 2;
+        // 如果组内有八分音符(underlines=1)，最多2个单位（1拍）
+        // 如果全是十六分/三十二分，最多4个单位（1拍）
+        const hasEighth = group.notes.some(n => n.underlines === 1);
+        const maxUnits = hasEighth ? 2 : 4;
 
-        return totalUnits <= maxUnits;
+        return currentUnits + noteUnits <= maxUnits;
       }
 
       calculateGroupUnits(group) {
-        // 计算组内已有的时值单位总数
+        // 计算组内已有的时值单位总数（以十六分音符为1单位）
         let units = 0;
-        for (const idx of group.indices) {
-          // 这里需要传入notes数组，但group里没有保存notes
-          // 简化处理：根据underlines估算
-          units += group.underlines >= 2 ? 1 : 2;
+        for (const note of group.notes) {
+          units += this.getNoteUnits(note);
         }
         return units;
       }
 
       getNoteUnits(note) {
         // 返回音符的时值单位（以十六分音符为1单位）
-        if (note.underlines >= 2) return 1; // 十六分 = 1单位
+        if (note.underlines >= 3) return 0.5; // 三十二分 = 0.5单位
+        if (note.underlines === 2) return 1; // 十六分 = 1单位
         if (note.underlines === 1) return 2; // 八分 = 2单位
         return 4; // 四分 = 4单位
       }
@@ -1433,14 +1433,31 @@
         const noteY = y + yOffset;
         const baseLineY = noteY + size * 0.4 + 2;
 
-        // 画每条下划线（从第一个音符中心到最后一个音符中心）
-        for (let line = 0; line < group.underlines; line++) {
-          const lineY = baseLineY + line * lineSpacing;
+        // 画最下面的主连线（所有音符都连）
+        ctx.beginPath();
+        ctx.moveTo(firstPos.x, baseLineY);
+        ctx.lineTo(lastPos.x, baseLineY);
+        ctx.stroke();
 
-          ctx.beginPath();
-          ctx.moveTo(firstPos.x, lineY);
-          ctx.lineTo(lastPos.x, lineY);
-          ctx.stroke();
+        // 画额外的下划线（根据每个音符的 underlines 数量）
+        // 遍历组内每个音符，在其中心位置画它自己的额外下划线
+        for (let i = 0; i < group.indices.length; i++) {
+          const idx = group.indices[i];
+          const note = notes[idx];
+          const pos = notePositions[idx];
+
+          // 这个音符需要画的额外下划线数（不包括最下面已经画的主线）
+          const extraLines = note.underlines - 1;
+
+          for (let line = 0; line < extraLines; line++) {
+            const lineY = baseLineY + (line + 1) * lineSpacing;
+            const lineWidth = size * 0.5;
+
+            ctx.beginPath();
+            ctx.moveTo(pos.x - lineWidth / 2, lineY);
+            ctx.lineTo(pos.x + lineWidth / 2, lineY);
+            ctx.stroke();
+          }
         }
       }
 
