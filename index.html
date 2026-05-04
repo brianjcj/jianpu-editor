@@ -785,7 +785,8 @@
           <tr><td><code>1-7</code></td><td>中音 do re mi fa sol la si</td></tr>
           <tr><td><code>^1-^7</code></td><td>高音（上方加点）</td></tr>
           <tr><td><code>_1-_7</code></td><td>低音（下方加点）</td></tr>
-          <tr><td><code>-</code></td><td>延长音/休止符</td></tr>
+          <tr><td><code>-</code></td><td>增时线（延长前一音符时值）</td></tr>
+          <tr><td><code>| - |</code></td><td>小节内独立休止符</td></tr>
           <tr><td><code>|</code></td><td>小节线</td></tr>
           <tr><td><code>||</code></td><td>终止线（双竖线）</td></tr>
           <tr><td><code>(12)</code></td><td>连音/圆滑线</td></tr>
@@ -966,7 +967,7 @@
             continue;
           }
 
-          // 休止符
+          // 增时线（延长前一个音符时值）或休止符
           if (ch === '-') {
             let duration = 1;
             let hasDot = false;
@@ -983,12 +984,21 @@
             // 计算时值
             duration = this.calculateDuration(underlines, hasDot);
 
-            tokens.push({
-              type: 'rest',
-              duration: duration,
-              underlines: underlines,
-              hasDot: hasDot
-            });
+            // 如果前面是音符，将增时线合并到前一个音符（延长时值）
+            const prevToken = tokens.length > 0 ? tokens[tokens.length - 1] : null;
+            if (prevToken && prevToken.type === 'note') {
+              prevToken.duration += duration;
+              // 标记有增时线，用于渲染时画延长线
+              prevToken.hasHighline = true;
+            } else {
+              // 前面没有音符，当作休止符处理
+              tokens.push({
+                type: 'rest',
+                duration: duration,
+                underlines: underlines,
+                hasDot: hasDot
+              });
+            }
             i = i2;
             continue;
           }
