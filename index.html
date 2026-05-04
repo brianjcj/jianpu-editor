@@ -740,6 +740,10 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
           <span class="btn-text">示例</span>
         </button>
+        <button class="btn btn-secondary" id="btnCopy" title="复制源码到剪贴板">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+          <span class="btn-text">复制</span>
+        </button>
       </div>
       <div class="status" id="status"><span class="status-dot"></span>就绪</div>
     </div>
@@ -1624,6 +1628,29 @@
       editor.value = example;
       render();
       status.innerHTML = '<span class="status-dot"></span>已加载：小星星';
+    });
+
+    // 复制源码按钮
+    document.getElementById('btnCopy').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(editor.value);
+        status.innerHTML = '<span class="status-dot"></span>已复制到剪贴板';
+        setTimeout(() => {
+          status.innerHTML = '<span class="status-dot"></span>就绪';
+        }, 2000);
+      } catch (err) {
+        // 降级方案
+        const textarea = document.createElement('textarea');
+        textarea.value = editor.value;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        status.innerHTML = '<span class="status-dot"></span>已复制到剪贴板';
+        setTimeout(() => {
+          status.innerHTML = '<span class="status-dot"></span>就绪';
+        }, 2000);
+      }
     });
 
     // 缩放控制
