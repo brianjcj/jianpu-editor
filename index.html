@@ -179,17 +179,17 @@
       opacity: 0.12;
     }
 
-    /* Filled button - Primary */
+    /* Filled button - Primary (same as secondary now) */
     .btn-primary {
-      background: var(--primary);
-      color: var(--on-primary);
-      box-shadow: var(--shadow-2);
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1.5px solid var(--outline);
     }
 
     .btn-primary:hover {
-      background: var(--accent-hover);
-      box-shadow: var(--shadow-3);
-      transform: translateY(-1px);
+      background: var(--surface-variant);
+      border-color: var(--primary);
+      color: var(--primary);
     }
 
     /* Outlined button - Secondary */
