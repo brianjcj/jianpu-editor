@@ -1502,14 +1502,30 @@
         this.isPlaying = false;
         state.isPlaying = false;
 
+        const now = this.audioCtx ? this.audioCtx.currentTime : 0;
+
         for (const source of this.currentSources) {
           try {
-            source.osc.stop();
-            source.osc.disconnect();
-            source.gain.disconnect();
+            // 平滑淡出，避免爆音
+            const gain = source.gain;
+            gain.gain.cancelScheduledValues(now);
+            gain.gain.setValueAtTime(gain.gain.value || 0.3, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+            // 0.05秒后停止振荡器
+            source.osc.stop(now + 0.06);
           } catch (e) {}
         }
-        this.currentSources = [];
+
+        // 清理资源
+        setTimeout(() => {
+          for (const source of this.currentSources) {
+            try {
+              source.osc.disconnect();
+              source.gain.disconnect();
+            } catch (e) {}
+          }
+          this.currentSources = [];
+        }, 100);
 
         document.getElementById('playbackBar').style.display = 'none';
         document.getElementById('playbackProgress').style.width = '0%';
