@@ -1187,7 +1187,10 @@
           }
         }
 
-        const baseWidth = availableWidth / Math.max(totalWeight, 1);
+        // 计算基础宽度，但限制最大宽度避免单小节过度拉伸
+        const rawBaseWidth = availableWidth / Math.max(totalWeight, 1);
+        const MAX_NOTE_WIDTH = 50; // 四分音符最大宽度限制
+        const baseWidth = Math.min(rawBaseWidth, MAX_NOTE_WIDTH);
         let currentX = x;
 
         for (let m = 0; m < lineMeasures.length; m++) {
