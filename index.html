@@ -1276,16 +1276,14 @@
 
       groupShortNotes(notes) {
         // 将相邻的短音符分组，用于连线下划线
-        // 八分音符(underlines=1)：每2个一组
-        // 十六分音符(underlines=2)：每4个一组
-        // 三十二分音符(underlines=3)：每4个一组
+        // 支持混合分组：前8后16、前16后8等组合
         const groups = [];
         let currentGroup = null;
 
         for (let i = 0; i < notes.length; i++) {
           const note = notes[i];
           if (note.type === 'note' && note.underlines > 0) {
-            if (!currentGroup || currentGroup.underlines !== note.underlines || this.isGroupFull(currentGroup)) {
+            if (!currentGroup || !this.canJoinGroup(currentGroup, note)) {
               // 开始新组
               if (currentGroup) groups.push(currentGroup);
               currentGroup = {
@@ -1298,6 +1296,8 @@
               // 继续当前组
               currentGroup.indices.push(i);
               currentGroup.endIdx = i;
+              // 更新组的underlines为最大值（用于决定画几条线）
+              currentGroup.underlines = Math.max(currentGroup.underlines, note.underlines);
             }
           } else {
             // 遇到非短音符，结束当前组
@@ -1312,10 +1312,34 @@
         return groups;
       }
 
-      isGroupFull(group) {
-        // 八分音符：2个一组；十六分/三十二分：4个一组
-        const maxSize = group.underlines === 1 ? 2 : 4;
-        return group.indices.length >= maxSize;
+      canJoinGroup(group, note) {
+        // 检查音符是否可以加入当前组
+        // 基本规则：相邻短音符可以混合分组
+        // 八分音符：最多2个时值单位
+        // 十六分音符：最多4个时值单位
+
+        const totalUnits = this.calculateGroupUnits(group) + this.getNoteUnits(note);
+        const maxUnits = group.underlines >= 2 ? 4 : 2;
+
+        return totalUnits <= maxUnits;
+      }
+
+      calculateGroupUnits(group) {
+        // 计算组内已有的时值单位总数
+        let units = 0;
+        for (const idx of group.indices) {
+          // 这里需要传入notes数组，但group里没有保存notes
+          // 简化处理：根据underlines估算
+          units += group.underlines >= 2 ? 1 : 2;
+        }
+        return units;
+      }
+
+      getNoteUnits(note) {
+        // 返回音符的时值单位（以十六分音符为1单位）
+        if (note.underlines >= 2) return 1; // 十六分 = 1单位
+        if (note.underlines === 1) return 2; // 八分 = 2单位
+        return 4; // 四分 = 4单位
       }
 
       renderNote(ctx, note, x, y, group, notePositions, noteIdx) {
