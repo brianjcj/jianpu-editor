@@ -438,6 +438,24 @@
       font-size: 13px;
     }
 
+    .zoom-select {
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      outline: none;
+      min-width: 90px;
+      text-align: center;
+    }
+
+    .zoom-select:focus {
+      border-color: var(--accent);
+    }
+
     .canvas-container {
       flex: 1;
       overflow: auto;
@@ -647,10 +665,17 @@
       <div class="preview-header">
         <span>🎼 预览</span>
         <div class="zoom-controls">
-          <button class="zoom-btn" id="zoomOut">−</button>
-          <span class="zoom-level" id="zoomLevel">100%</span>
-          <button class="zoom-btn" id="zoomIn">+</button>
-          <button class="zoom-btn" id="zoomFit" title="适应宽度">⤢</button>
+          <button class="zoom-btn" id="zoomOut" title="缩小">−</button>
+          <select class="zoom-select" id="zoomSelect">
+            <option value="0.5">50%</option>
+            <option value="0.75">75%</option>
+            <option value="1" selected>100%</option>
+            <option value="1.25">125%</option>
+            <option value="1.5">150%</option>
+            <option value="2">200%</option>
+            <option value="fit">适应宽度</option>
+          </select>
+          <button class="zoom-btn" id="zoomIn" title="放大">+</button>
         </div>
       </div>
       <div class="canvas-container" id="canvasContainer">
@@ -1418,26 +1443,41 @@
 
     // 缩放控制
     document.getElementById('zoomIn').addEventListener('click', () => {
-      state.zoom = Math.min(state.zoom + 0.1, 2.0);
+      const zoomSelect = document.getElementById('zoomSelect');
+      const options = Array.from(zoomSelect.options).filter(o => o.value !== 'fit').map(o => parseFloat(o.value));
+      const currentIdx = options.findIndex(v => v >= state.zoom);
+      const nextZoom = currentIdx < options.length - 1 ? options[currentIdx + 1] : options[options.length - 1];
+      state.zoom = nextZoom;
       updateZoom();
+      zoomSelect.value = String(nextZoom);
     });
 
     document.getElementById('zoomOut').addEventListener('click', () => {
-      state.zoom = Math.max(state.zoom - 0.1, 0.5);
+      const zoomSelect = document.getElementById('zoomSelect');
+      const options = Array.from(zoomSelect.options).filter(o => o.value !== 'fit').map(o => parseFloat(o.value));
+      const currentIdx = options.findIndex(v => v > state.zoom);
+      const prevIdx = currentIdx <= 0 ? 0 : currentIdx - 1;
+      const prevZoom = options[prevIdx];
+      state.zoom = prevZoom;
       updateZoom();
+      zoomSelect.value = String(prevZoom);
     });
 
-    document.getElementById('zoomFit').addEventListener('click', () => {
-      const containerWidth = canvasContainer.clientWidth - 40;
-      const canvasWidth = parseInt(canvas.style.width);
-      state.zoom = containerWidth / canvasWidth;
+    document.getElementById('zoomSelect').addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (val === 'fit') {
+        const containerWidth = canvasContainer.clientWidth - 40;
+        const canvasWidth = parseInt(canvas.style.width);
+        state.zoom = containerWidth / canvasWidth;
+      } else {
+        state.zoom = parseFloat(val);
+      }
       updateZoom();
     });
 
     function updateZoom() {
       canvas.style.transform = `scale(${state.zoom})`;
       canvas.style.transformOrigin = 'top center';
-      document.getElementById('zoomLevel').textContent = Math.round(state.zoom * 100) + '%';
     }
 
     // 键盘快捷键
