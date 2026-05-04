@@ -1377,6 +1377,20 @@
           ctx.fill();
         }
 
+        // 增时线（二分音符及更长时值的延长线）
+        if (note.hasHighline) {
+          ctx.strokeStyle = '#1a1a2e';
+          ctx.lineWidth = 2;
+          const highlineY = noteY + size * 0.1;
+          // 从音符中心向右画横线，长度根据duration决定
+          // duration=2 画一条，duration=3 画一条+附点效果，duration=4 不画（全音符）
+          const lineLength = size * 0.8;
+          ctx.beginPath();
+          ctx.moveTo(x + xOffset, highlineY);
+          ctx.lineTo(x + lineLength + xOffset, highlineY);
+          ctx.stroke();
+        }
+
         // 单音符的下划线（不在组内的，或组内只有一个音符的）
         if (note.underlines > 0 && (!group || group.indices.length === 1)) {
           ctx.strokeStyle = '#1a1a2e';
