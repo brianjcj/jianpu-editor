@@ -1634,12 +1634,11 @@
 
     // 复制源码按钮
     document.getElementById('btnCopy').addEventListener('click', async () => {
+      const btn = document.getElementById('btnCopy');
+      const originalHTML = btn.innerHTML;
+
       try {
         await navigator.clipboard.writeText(editor.value);
-        status.innerHTML = '<span class="status-dot"></span>已复制到剪贴板';
-        setTimeout(() => {
-          status.innerHTML = '<span class="status-dot"></span>就绪';
-        }, 2000);
       } catch (err) {
         // 降级方案
         const textarea = document.createElement('textarea');
@@ -1648,11 +1647,24 @@
         textarea.select();
         document.execCommand('copy');
         document.body.removeChild(textarea);
-        status.innerHTML = '<span class="status-dot"></span>已复制到剪贴板';
-        setTimeout(() => {
-          status.innerHTML = '<span class="status-dot"></span>就绪';
-        }, 2000);
       }
+
+      // 按钮变为成功状态
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> 已复制';
+      btn.style.background = 'var(--success)';
+      btn.style.color = '#fff';
+      btn.style.borderColor = 'var(--success)';
+
+      // 底部状态栏提示
+      status.innerHTML = '<span class="status-dot" style="background:var(--success);"></span>已复制到剪贴板';
+
+      setTimeout(() => {
+        btn.innerHTML = originalHTML;
+        btn.style.background = '';
+        btn.style.color = '';
+        btn.style.borderColor = '';
+        status.innerHTML = '<span class="status-dot"></span>就绪';
+      }, 2000);
     });
 
     // 缩放控制
