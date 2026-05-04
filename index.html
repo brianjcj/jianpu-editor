@@ -1187,32 +1187,62 @@
       }
 
       renderLine(ctx, lineMeasures, x, y, availableWidth) {
-        // 计算总音符数
-        let totalNotes = 0;
+        // 计算总时值权重：四分音符=1, 八分=0.7, 十六分=0.5
+        let totalWeight = 0;
         for (const measure of lineMeasures) {
-          totalNotes += measure.notes.length;
+          for (const note of measure.notes) {
+            totalWeight += this.getNoteWeight(note);
+          }
         }
 
-        const noteWidth = availableWidth / Math.max(totalNotes, 1);
+        const baseWidth = availableWidth / Math.max(totalWeight, 1);
         let currentX = x;
 
         for (let m = 0; m < lineMeasures.length; m++) {
           const measure = lineMeasures[m];
           const isLast = m === lineMeasures.length - 1;
 
+          // 识别需要连线的音符组
+          const noteGroups = this.groupShortNotes(measure.notes);
+
+          // 预计算每个音符的位置
+          const notePositions = [];
+          let tempX = currentX;
+          for (let i = 0; i < measure.notes.length; i++) {
+            const note = measure.notes[i];
+            const noteWidth = baseWidth * this.getNoteWeight(note);
+            notePositions.push({
+              x: tempX + noteWidth / 2,
+              width: noteWidth,
+              left: tempX,
+              right: tempX + noteWidth
+            });
+            tempX += noteWidth;
+          }
+
           // 渲染小节内音符
           for (let i = 0; i < measure.notes.length; i++) {
             const note = measure.notes[i];
-            const noteX = currentX + noteWidth / 2;
+            const pos = notePositions[i];
 
             if (note.type === 'note') {
-              this.renderNote(ctx, note, noteX, y);
+              // 找到这个音符属于哪个组
+              const group = noteGroups.find(g => g.indices.includes(i));
+              this.renderNote(ctx, note, pos.x, y, group, notePositions, i);
             } else if (note.type === 'rest') {
-              this.renderRest(ctx, note, noteX, y);
+              this.renderRest(ctx, note, pos.x, y);
             }
-
-            currentX += noteWidth;
           }
+
+          // 画组间连线下划线
+          for (const group of noteGroups) {
+            if (group.indices.length >= 2) {
+              this.renderGroupBeams(ctx, measure.notes, notePositions, group, y);
+            }
+          }
+
+          // 更新 currentX 到小节末尾
+          currentX = tempX;
 
           // 小节线
           ctx.strokeStyle = '#1a1a2e';
@@ -1240,10 +1270,57 @@
         }
       }
 
-      renderNote(ctx, note, x, y) {
+      getNoteWeight(note) {
+        if (note.type === 'rest') return note.duration;
+        // 有增时线的音符，基础时值 + 增时值
+        let baseDuration = note.duration;
+        // 增时线已经合并到 duration 中，所以直接返回
+        // 但为了区分显示宽度，我们需要知道原始基础时值
+        // 这里简化处理：duration >= 1 是四分或更长，< 1 是短音符
+        if (note.duration >= 1) return 1;
+        if (note.duration >= 0.5) return 0.7; // 八分音符组占 0.7 宽度
+        if (note.duration >= 0.25) return 0.5; // 十六分音符组占 0.5 宽度
+        return 0.4; // 三十二分
+      }
+
+      groupShortNotes(notes) {
+        // 将相邻的短音符（有下划线的）分组，用于连线下划线
+        const groups = [];
+        let currentGroup = null;
+
+        for (let i = 0; i < notes.length; i++) {
+          const note = notes[i];
+          if (note.type === 'note' && note.underlines > 0) {
+            if (!currentGroup || currentGroup.underlines !== note.underlines) {
+              // 开始新组
+              if (currentGroup) groups.push(currentGroup);
+              currentGroup = {
+                indices: [i],
+                underlines: note.underlines,
+                startIdx: i,
+                endIdx: i
+              };
+            } else {
+              // 继续当前组
+              currentGroup.indices.push(i);
+              currentGroup.endIdx = i;
+            }
+          } else {
+            // 遇到非短音符，结束当前组
+            if (currentGroup) {
+              groups.push(currentGroup);
+              currentGroup = null;
+            }
+          }
+        }
+        if (currentGroup) groups.push(currentGroup);
+
+        return groups;
+      }
+
+      renderNote(ctx, note, x, y, group, notePositions, noteIdx) {
         const size = 20; // 缩小字号适配 A4
         const dotRadius = 2.5;
-        const underlineHeight = 2;
 
         ctx.fillStyle = '#1a1a2e';
         ctx.font = `bold ${size}px "Segoe UI", "PingFang SC", sans-serif`;
@@ -1294,10 +1371,10 @@
           ctx.fill();
         }
 
-        // 下划线（减时线）
-        if (note.underlines > 0) {
+        // 单音符的下划线（不在组内的，或组内只有一个音符的）
+        if (note.underlines > 0 && (!group || group.indices.length === 1)) {
           ctx.strokeStyle = '#1a1a2e';
-          ctx.lineWidth = underlineHeight;
+          ctx.lineWidth = 2;
           const lineY = noteY + size * 0.4 + 2;
           const lineWidth = size * 0.6;
 
@@ -1307,6 +1384,39 @@
             ctx.lineTo(x + lineWidth / 2 + xOffset, lineY + i * 5);
             ctx.stroke();
           }
+        }
+      }
+
+      renderGroupBeams(ctx, notes, notePositions, group, y) {
+        const size = 20;
+        const underlineHeight = 2;
+        const lineSpacing = 5;
+
+        ctx.strokeStyle = '#1a1a2e';
+        ctx.lineWidth = underlineHeight;
+
+        // 获取组内第一个和最后一个音符的位置
+        const firstIdx = group.indices[0];
+        const lastIdx = group.indices[group.indices.length - 1];
+        const firstPos = notePositions[firstIdx];
+        const lastPos = notePositions[lastIdx];
+        const firstNote = notes[firstIdx];
+
+        // 计算Y位置（基于第一个音符）
+        let yOffset = 0;
+        if (firstNote.octave > 0) yOffset = -10 * firstNote.octave;
+        if (firstNote.octave < 0) yOffset = 10 * Math.abs(firstNote.octave);
+        const noteY = y + yOffset;
+        const baseLineY = noteY + size * 0.4 + 2;
+
+        // 画每条下划线（从第一个音符中心到最后一个音符中心）
+        for (let line = 0; line < group.underlines; line++) {
+          const lineY = baseLineY + line * lineSpacing;
+
+          ctx.beginPath();
+          ctx.moveTo(firstPos.x, lineY);
+          ctx.lineTo(lastPos.x, lineY);
+          ctx.stroke();
         }
       }
 
