@@ -1272,11 +1272,10 @@
 
       getNoteWeight(note) {
         if (note.type === 'rest') return note.duration;
-        // 有增时线的音符，基础时值 + 增时值
-        let baseDuration = note.duration;
-        // 增时线已经合并到 duration 中，所以直接返回
-        // 但为了区分显示宽度，我们需要知道原始基础时值
-        // 这里简化处理：duration >= 1 是四分或更长，< 1 是短音符
+        // 增时线已经合并到 duration 中
+        // 有增时线的音符(duration >= 2 或 hasHighline)，按原始四分音符算宽度
+        if (note.hasHighline) return 1;
+        // duration >= 1 是四分或更长
         if (note.duration >= 1) return 1;
         if (note.duration >= 0.5) return 0.7; // 八分音符组占 0.7 宽度
         if (note.duration >= 0.25) return 0.5; // 十六分音符组占 0.5 宽度
@@ -1284,14 +1283,17 @@
       }
 
       groupShortNotes(notes) {
-        // 将相邻的短音符（有下划线的）分组，用于连线下划线
+        // 将相邻的短音符分组，用于连线下划线
+        // 八分音符(underlines=1)：每2个一组
+        // 十六分音符(underlines=2)：每4个一组
+        // 三十二分音符(underlines=3)：每4个一组
         const groups = [];
         let currentGroup = null;
 
         for (let i = 0; i < notes.length; i++) {
           const note = notes[i];
           if (note.type === 'note' && note.underlines > 0) {
-            if (!currentGroup || currentGroup.underlines !== note.underlines) {
+            if (!currentGroup || currentGroup.underlines !== note.underlines || this.isGroupFull(currentGroup)) {
               // 开始新组
               if (currentGroup) groups.push(currentGroup);
               currentGroup = {
@@ -1316,6 +1318,12 @@
         if (currentGroup) groups.push(currentGroup);
 
         return groups;
+      }
+
+      isGroupFull(group) {
+        // 八分音符：2个一组；十六分/三十二分：4个一组
+        const maxSize = group.underlines === 1 ? 2 : 4;
+        return group.indices.length >= maxSize;
       }
 
       renderNote(ctx, note, x, y, group, notePositions, noteIdx) {
