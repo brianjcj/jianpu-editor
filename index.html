@@ -1431,13 +1431,33 @@
         const noteY = y + yOffset;
         const baseLineY = noteY + size * 0.4 + 2;
 
-        // 画每条下划线（从第一个音符中心到最后一个音符中心）
-        for (let line = 0; line < group.underlines; line++) {
-          const lineY = baseLineY + line * lineSpacing;
+        // 画第一条下划线（所有音符都连）
+        ctx.beginPath();
+        ctx.moveTo(firstPos.x, baseLineY);
+        ctx.lineTo(lastPos.x, baseLineY);
+        ctx.stroke();
+
+        // 画第二条下划线（只在有2条以上下划线的音符之间连）
+        // 找到所有 underlines >= 2 的音符
+        const sixteenthIndices = [];
+        for (let i = 0; i < group.indices.length; i++) {
+          const idx = group.indices[i];
+          if (notes[idx].underlines >= 2) {
+            sixteenthIndices.push(i);
+          }
+        }
+
+        // 如果有相邻的十六分音符，连第二条线
+        if (sixteenthIndices.length >= 2) {
+          const lineY = baseLineY + lineSpacing;
+          const first16Idx = group.indices[sixteenthIndices[0]];
+          const last16Idx = group.indices[sixteenthIndices[sixteenthIndices.length - 1]];
+          const first16Pos = notePositions[first16Idx];
+          const last16Pos = notePositions[last16Idx];
 
           ctx.beginPath();
-          ctx.moveTo(firstPos.x, lineY);
-          ctx.lineTo(lastPos.x, lineY);
+          ctx.moveTo(first16Pos.x, lineY);
+          ctx.lineTo(last16Pos.x, lineY);
           ctx.stroke();
         }
       }
