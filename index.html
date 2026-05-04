@@ -1467,7 +1467,7 @@
       const val = e.target.value;
       if (val === 'fit') {
         const containerWidth = canvasContainer.clientWidth - 40;
-        const canvasWidth = parseInt(canvas.style.width);
+        const canvasWidth = A4_WIDTH; // A4纸固定宽度720px
         state.zoom = containerWidth / canvasWidth;
       } else {
         state.zoom = parseFloat(val);
