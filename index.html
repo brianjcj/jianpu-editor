@@ -990,19 +990,13 @@
             // 计算时值
             duration = this.calculateDuration(underlines, hasDot);
 
-            // 如果前面是音符，将增时线合并到前一个音符（延长时值）
-            const prevToken = tokens.length > 0 ? tokens[tokens.length - 1] : null;
-            if (prevToken && prevToken.type === 'note') {
-              prevToken.duration += duration;
-            } else {
-              // 前面没有音符，当作休止符处理
-              tokens.push({
-                type: 'rest',
-                duration: duration,
-                underlines: underlines,
-                hasDot: hasDot
-              });
-            }
+            // 增时线始终作为独立的 rest token（占一个四分音符宽度，显示横线）
+            tokens.push({
+              type: 'rest',
+              duration: duration,
+              underlines: underlines,
+              hasDot: hasDot
+            });
             i = i2;
             continue;
           }
