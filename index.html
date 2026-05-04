@@ -1481,6 +1481,12 @@
         // 播放结束自动停止
         setTimeout(() => {
           this.stop();
+          // 恢复播放按钮 UI
+          const btnPlay = document.getElementById('btnPlay');
+          if (btnPlay) {
+            btnPlay.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> 播放';
+            btnPlay.classList.remove('btn-active');
+          }
         }, totalDuration * 1000 + 200);
       }
 
@@ -1568,7 +1574,7 @@
     document.getElementById('btnPlay').addEventListener('click', () => {
       if (state.isPlaying) {
         player.stop();
-        document.getElementById('btnPlay').textContent = '▶ 播放';
+        document.getElementById('btnPlay').innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> 播放';
         document.getElementById('btnPlay').classList.remove('btn-active');
         return;
       }
