@@ -1398,7 +1398,7 @@
           ctx.strokeStyle = '#1a1a2e';
           ctx.lineWidth = 2;
           const lineY = noteY + size * 0.4 + 2;
-          const lineWidth = size * 1.0; // 覆盖整个音符宽度
+          const lineWidth = size * 0.8; // 覆盖音符宽度的80%
 
           for (let i = 0; i < note.underlines; i++) {
             ctx.beginPath();
@@ -1432,9 +1432,9 @@
         const baseLineY = noteY + size * 0.4 + 2;
 
         // 画第一条下划线（所有音符都连）
-        // 使用音符宽度而不是中心点，让线覆盖整个字符
-        const firstLeft = firstPos.left + size * 0.1;
-        const lastRight = lastPos.right - size * 0.1;
+        // 使用音符宽度，让线覆盖音符宽度的80%
+        const firstLeft = firstPos.x - size * 0.4;
+        const lastRight = lastPos.x + size * 0.4;
         ctx.beginPath();
         ctx.moveTo(firstLeft, baseLineY);
         ctx.lineTo(lastRight, baseLineY);
@@ -1458,9 +1458,9 @@
           const first16Pos = notePositions[first16Idx];
           const last16Pos = notePositions[last16Idx];
 
-          // 第二条线也覆盖整个音符宽度
-          const first16Left = first16Pos.left + size * 0.1;
-          const last16Right = last16Pos.right - size * 0.1;
+          // 第二条线也覆盖音符宽度的80%
+          const first16Left = first16Pos.x - size * 0.4;
+          const last16Right = last16Pos.x + size * 0.4;
 
           ctx.beginPath();
           ctx.moveTo(first16Left, lineY);
