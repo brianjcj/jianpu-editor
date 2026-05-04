@@ -1469,6 +1469,8 @@
         const containerWidth = canvasContainer.clientWidth - 40;
         const canvasWidth = A4_WIDTH; // A4纸固定宽度720px
         state.zoom = containerWidth / canvasWidth;
+        // 更新下拉框显示实际计算出的百分比
+        e.target.value = String(Math.round(state.zoom * 100) / 100);
       } else {
         state.zoom = parseFloat(val);
       }
