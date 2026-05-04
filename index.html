@@ -1272,9 +1272,11 @@
 
       getNoteWeight(note) {
         if (note.type === 'rest') return note.duration;
-        // duration >= 1 的音符（四分、二分、全音符等）按实际时值占宽
-        // duration=1 占 1 份，duration=2 占 2 份，duration=3 占 3 份
-        if (note.duration >= 1) return note.duration;
+        // 增时线已经合并到 duration 中
+        // 有增时线的音符(duration >= 2 或 hasHighline)，按原始四分音符算宽度
+        if (note.hasHighline) return 1;
+        // duration >= 1 是四分或更长
+        if (note.duration >= 1) return 1;
         if (note.duration >= 0.5) return 0.7; // 八分音符组占 0.7 宽度
         if (note.duration >= 0.25) return 0.5; // 十六分音符组占 0.5 宽度
         return 0.4; // 三十二分
@@ -1375,20 +1377,6 @@
           ctx.beginPath();
           ctx.arc(x + size * 0.5 + xOffset, noteY + 1, dotRadius, 0, Math.PI * 2);
           ctx.fill();
-        }
-
-        // 增时线（二分音符及更长时值的延长线）
-        if (note.hasHighline) {
-          ctx.strokeStyle = '#1a1a2e';
-          ctx.lineWidth = 2;
-          const highlineY = noteY + size * 0.1;
-          // 从音符中心向右画横线，长度根据duration决定
-          // duration=2 画一条，duration=3 画一条+附点效果，duration=4 不画（全音符）
-          const lineLength = size * 0.8;
-          ctx.beginPath();
-          ctx.moveTo(x + xOffset, highlineY);
-          ctx.lineTo(x + lineLength + xOffset, highlineY);
-          ctx.stroke();
         }
 
         // 单音符的下划线（不在组内的，或组内只有一个音符的）
