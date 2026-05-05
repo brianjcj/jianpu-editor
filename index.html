@@ -1460,12 +1460,8 @@
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // 计算Y偏移（高低音）
-        let yOffset = 0;
-        if (note.octave > 0) yOffset = -10 * note.octave;
-        if (note.octave < 0) yOffset = 10 * Math.abs(note.octave);
-
-        const noteY = y + yOffset;
+        // 所有音符统一基线，不根据高低音偏移
+        const noteY = y;
 
         // 升降号
         let xOffset = 0;
@@ -1479,7 +1475,7 @@
         ctx.font = `bold ${size}px "Segoe UI", "PingFang SC", sans-serif`;
         ctx.fillText(note.digit, x + xOffset, noteY);
 
-        // 高音点（上方）
+        // 高音点（上方）—— 基于统一基线向上画
         if (note.octave > 0) {
           for (let i = 0; i < note.octave; i++) {
             ctx.beginPath();
@@ -1488,7 +1484,7 @@
           }
         }
 
-        // 低音点（下方）
+        // 低音点（下方）—— 基于统一基线向下画
         if (note.octave < 0) {
           for (let i = 0; i < Math.abs(note.octave); i++) {
             ctx.beginPath();
