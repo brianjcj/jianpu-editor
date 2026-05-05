@@ -1037,8 +1037,8 @@
             continue;
           }
 
-          // 音符
-          if (/[0-7]/.test(ch)) {
+          // 音符（包括带 ^ 高音前缀和 _ 低音前缀的）
+          if (/[0-7]/.test(ch) || ch === '^' || ch === '_') {
             const note = this.parseNote(line, i);
             tokens.push(note.token);
             i = note.nextIndex;
