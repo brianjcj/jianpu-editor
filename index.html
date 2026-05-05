@@ -348,29 +348,27 @@
         line-height: 1.6;
         min-height: 80px;
       }
-
-      .syntax-help {
-        width: 100% !important;
-        display: block;
-        max-height: 100px;
-        padding: 6px 8px;
-        font-size: 10px;
-        overflow-y: auto;
-        flex-shrink: 0;
+      /* 移动端语法提示弹窗 */
+      .syntax-modal-content {
+        max-width: 90%;
+        padding: 16px;
       }
 
-      .syntax-help h4 {
-        font-size: 11px;
-        margin-bottom: 3px;
+      .syntax-modal {
+        align-items: flex-start;
+        padding-top: 20%;
       }
 
-      .syntax-help table {
-        font-size: 10px;
+      .syntax-modal-header h4 {
+        font-size: 14px;
       }
 
-      .syntax-help td {
-        padding: 1px 3px;
-        line-height: 1.3;
+      .syntax-modal table {
+        font-size: 12px;
+      }
+
+      .syntax-modal td {
+        padding: 4px 6px;
       }
 
       .preview-panel {
@@ -454,53 +452,81 @@
     }
 
     /* Syntax legend */
-    .syntax-help {
-      padding: 12px 16px;
+    /* 语法提示弹窗 */
+    .syntax-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .syntax-modal.active {
+      display: flex;
+    }
+
+    .syntax-modal-content {
       background: var(--surface);
-      border-top: 1px solid var(--border);
-      font-size: 12px;
-      color: var(--text-muted);
-      max-height: 160px;
+      border-radius: 12px;
+      padding: 20px;
+      max-width: 400px;
+      width: 90%;
+      max-height: 80vh;
       overflow-y: auto;
-      /* 确保滚动包含所有内容 */
-      box-sizing: border-box;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
     }
 
-    .syntax-help h4 {
+    .syntax-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .syntax-modal-header h4 {
       color: var(--accent);
-      margin: 0 0 6px 0;
-      font-size: 13px;
-      line-height: 1.4;
+      margin: 0;
+      font-size: 16px;
     }
 
-    .syntax-help code {
-      background: var(--surface-light);
-      padding: 1px 4px;
-      border-radius: 3px;
-      color: var(--warning);
-      font-family: monospace;
+    .syntax-modal-close {
+      background: none;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+      color: var(--text-muted);
+      padding: 4px;
+      line-height: 1;
     }
 
-    .syntax-help table {
+    .syntax-modal-close:hover {
+      color: var(--text);
+    }
+
+    .syntax-modal table {
       width: 100%;
       border-collapse: collapse;
-      margin: 0;
+      font-size: 13px;
     }
 
-    .syntax-help tr {
-      line-height: 1.5;
-    }
-
-    .syntax-help td {
-      padding: 2px 8px;
+    .syntax-modal td {
+      padding: 6px 8px;
       border-bottom: 1px solid var(--border);
-      vertical-align: top;
     }
 
-    /* 确保最后一行可见 */
-    .syntax-help tr:last-child td {
+    .syntax-modal tr:last-child td {
       border-bottom: none;
-      padding-bottom: 4px;
+    }
+
+    .syntax-help {
+      display: none !important;
     }
 
     /* ===== Preview Panel ===== */
@@ -800,7 +826,10 @@
 
 点击右侧「示例」按钮加载完整demo"></textarea>
       <div class="syntax-help panel-hidden">
-        <h4>标记语法速查</h4>
+        <div class="syntax-help-header">
+          <h4>标记语法速查</h4>
+          <button class="syntax-help-close" id="btnCloseSyntax">✕</button>
+        </div>
         <table>
           <tr><td><code>1-7</code></td><td>中音 do re mi fa sol la si</td></tr>
           <tr><td><code>^1-^7</code></td><td>高音（上方加点）</td></tr>
@@ -820,6 +849,35 @@
           <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
           <tr><td><code># 注释</code></td><td>行注释</td></tr>
         </table>
+      </div>
+      
+      <!-- 语法提示弹窗 -->
+      <div class="syntax-modal" id="syntaxModal">
+        <div class="syntax-modal-content">
+          <div class="syntax-modal-header">
+            <h4>标记语法速查</h4>
+            <button class="syntax-modal-close" id="btnCloseSyntaxModal">✕</button>
+          </div>
+          <table>
+            <tr><td><code>1-7</code></td><td>中音 do re mi fa sol la si</td></tr>
+            <tr><td><code>^1-^7</code></td><td>高音（上方加点）</td></tr>
+            <tr><td><code>_1-_7</code></td><td>低音（下方加点）</td></tr>
+            <tr><td><code>-</code></td><td>增时线（延长前一音符时值）</td></tr>
+            <tr><td><code>| - |</code></td><td>小节内独立休止符</td></tr>
+            <tr><td><code>|</code></td><td>小节线</td></tr>
+            <tr><td><code>||</code></td><td>终止线（双竖线）</td></tr>
+            <tr><td><code>1~</code></td><td>连音线（tie，连接下一个同音高音符）</td></tr>
+            <tr><td><code>1#</code></td><td>升半音</td></tr>
+            <tr><td><code>1b</code></td><td>降半音</td></tr>
+            <tr><td><code>1.</code></td><td>附点音符（时值×1.5）</td></tr>
+            <tr><td><code>1/</code></td><td>下划线（八分音符）</td></tr>
+            <tr><td><code>1//</code></td><td>双下划线（十六分音符）</td></tr>
+            <tr><td><code>1=</code></td><td>延长线下划线</td></tr>
+            <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
+            <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
+            <tr><td><code># 注释</code></td><td>行注释</td></tr>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -2002,9 +2060,25 @@
       preview: true
     };
 
+    // 语法提示弹窗控制
+    const syntaxModal = document.getElementById('syntaxModal');
+    const btnCloseSyntaxModal = document.getElementById('btnCloseSyntaxModal');
+
+    function openSyntaxModal() {
+      syntaxModal.classList.add('active');
+    }
+
+    function closeSyntaxModal() {
+      syntaxModal.classList.remove('active');
+    }
+
+    btnCloseSyntaxModal.addEventListener('click', closeSyntaxModal);
+    syntaxModal.addEventListener('click', (e) => {
+      if (e.target === syntaxModal) closeSyntaxModal();
+    });
+
     function updatePanelVisibility() {
       const editorPanel = document.querySelector('.editor-panel');
-      const syntaxHelp = document.querySelector('.syntax-help');
       const previewPanel = document.querySelector('.preview-panel');
       const main = document.querySelector('.main');
 
@@ -2017,12 +2091,11 @@
         document.getElementById('toggleEditor').classList.remove('active');
       }
 
-      // 语法提示
+      // 语法提示 - 现在用弹窗，不再控制面板显示
       if (panelStates.syntax) {
-        syntaxHelp.classList.remove('panel-hidden');
+        openSyntaxModal();
         document.getElementById('toggleSyntax').classList.add('active');
       } else {
-        syntaxHelp.classList.add('panel-hidden');
         document.getElementById('toggleSyntax').classList.remove('active');
       }
 
