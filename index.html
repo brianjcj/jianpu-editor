@@ -924,11 +924,11 @@
           <button class="syntax-help-close" id="btnCloseSyntax">✕</button>
         </div>
         <table>
-          <tr><td><code>1-7</code></td><td>中音 do re mi fa sol la si</td></tr>
+          <tr><td><code>0-7</code></td><td>中音 do re mi fa sol la si（0为休止符）</td></tr>
           <tr><td><code>^1-^7</code></td><td>高音（上方加点）</td></tr>
           <tr><td><code>_1-_7</code></td><td>低音（下方加点）</td></tr>
           <tr><td><code>-</code></td><td>增时线（延长前一音符时值）</td></tr>
-          <tr><td><code>| - |</code></td><td>小节内独立休止符</td></tr>
+          <tr><td><code>0</code></td><td>休止符</td></tr>
           <tr><td><code>|</code></td><td>小节线</td></tr>
           <tr><td><code>||</code></td><td>终止线（双竖线）</td></tr>
           <tr><td><code>1~</code></td><td>连音线（tie，连接下一个同音高音符）</td></tr>
@@ -938,13 +938,14 @@
           <tr><td><code>1/</code></td><td>下划线（八分音符）</td></tr>
           <tr><td><code>1//</code></td><td>双下划线（十六分音符）</td></tr>
           <tr><td><code>1///</code></td><td>三下划线（三十二分音符）</td></tr>
-          <tr><td><code>1=</code></td><td>延长线下划线</td></tr>
+          <tr><td><code>1=</code></td><td>十六分音符（同 <code>1//</code>）</td></tr>
+          <tr><td><code>{3:1/ 2/ 3/}</code></td><td>三连音（N连音通用，如 {5:...}）</td></tr>
           <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
           <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
           <tr><td><code># 注释</code></td><td>行注释</td></tr>
         </table>
       </div>
-      
+
     <!-- 浮动虚拟键盘 -->
     <div class="fab-keyboard" id="fabKeyboard">
       <div class="fab-keys" id="fabKeys">
@@ -967,6 +968,7 @@
           <button class="fab-key" data-char=" " title="空格">␣</button>
         </div>
         <div class="fab-row">
+          <button class="fab-key" data-char="{3:}" title="三连音">3⌢</button>
           <button class="fab-key fab-key-back" data-char="BACKSPACE" title="退格">⌫</button>
         </div>
       </div>
@@ -981,11 +983,11 @@
             <button class="syntax-modal-close" id="btnCloseSyntaxModal">✕</button>
           </div>
           <table>
-            <tr><td><code>1-7</code></td><td>中音 do re mi fa sol la si</td></tr>
+            <tr><td><code>0-7</code></td><td>中音 do re mi fa sol la si（0为休止符）</td></tr>
             <tr><td><code>^1-^7</code></td><td>高音（上方加点）</td></tr>
             <tr><td><code>_1-_7</code></td><td>低音（下方加点）</td></tr>
             <tr><td><code>-</code></td><td>增时线（延长前一音符时值）</td></tr>
-            <tr><td><code>| - |</code></td><td>小节内独立休止符</td></tr>
+            <tr><td><code>0</code></td><td>休止符</td></tr>
             <tr><td><code>|</code></td><td>小节线</td></tr>
             <tr><td><code>||</code></td><td>终止线（双竖线）</td></tr>
             <tr><td><code>1~</code></td><td>连音线（tie，连接下一个同音高音符）</td></tr>
@@ -995,7 +997,8 @@
             <tr><td><code>1/</code></td><td>下划线（八分音符）</td></tr>
             <tr><td><code>1//</code></td><td>双下划线（十六分音符）</td></tr>
             <tr><td><code>1///</code></td><td>三下划线（三十二分音符）</td></tr>
-            <tr><td><code>1=</code></td><td>延长线下划线</td></tr>
+            <tr><td><code>1=</code></td><td>十六分音符（同 <code>1//</code>）</td></tr>
+            <tr><td><code>{3:1/ 2/ 3/}</code></td><td>三连音（N连音通用，如 {5:...}）</td></tr>
             <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
             <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
             <tr><td><code># 注释</code></td><td>行注释</td></tr>
@@ -1170,11 +1173,44 @@
             }
           }
 
+          // 连音（三连音/五连音等）：{N:...}，如 {3:1/ 2/ 3/}
+          if (ch === '{') {
+            const tuplet = this.parseTuplet(line, i);
+            if (tuplet) {
+              tokens.push(...tuplet.tokens);
+              i = tuplet.nextIndex;
+              continue;
+            }
+          }
+
           // 音符（包括带 ^ 高音前缀和 _ 低音前缀的）
-          if (/[0-7]/.test(ch) || ch === '^' || ch === '_') {
+          if (/[1-7]/.test(ch) || ch === '^' || ch === '_') {
             const note = this.parseNote(line, i);
             tokens.push(note.token);
             i = note.nextIndex;
+            continue;
+          }
+
+          // 休止符 0
+          if (ch === '0') {
+            let hasDot = false;
+            let underlines = 0;
+            let i2 = i + 1;
+            while (i2 < line.length && (line[i2] === '.' || line[i2] === '/' || line[i2] === '=')) {
+              if (line[i2] === '.') hasDot = true;
+              if (line[i2] === '/') underlines++;
+              if (line[i2] === '=') underlines += 2;
+              i2++;
+            }
+            const duration = this.calculateDuration(underlines, hasDot);
+            tokens.push({
+              type: 'rest',
+              digit: '0',
+              duration: duration,
+              underlines: underlines,
+              hasDot: hasDot
+            });
+            i = i2;
             continue;
           }
 
@@ -1200,7 +1236,8 @@
               type: 'rest',
               duration: duration,
               underlines: underlines,
-              hasDot: hasDot
+              hasDot: hasDot,
+              isExtension: true
             });
             i = i2;
             continue;
@@ -1229,6 +1266,31 @@
 
         // 数字
         const digit = line[i];
+
+        // 0 是休止符
+        if (digit === '0') {
+          i++;
+          let hasDot = false;
+          let underlines = 0;
+          while (i < line.length) {
+            const ch = line[i];
+            if (ch === '.') { hasDot = true; i++; }
+            else if (ch === '/') { underlines++; i++; }
+            else if (ch === '=') { underlines += 2; i++; }
+            else break;
+          }
+          return {
+            token: {
+              type: 'rest',
+              digit: '0',
+              duration: this.calculateDuration(underlines, hasDot),
+              underlines: underlines,
+              hasDot: hasDot
+            },
+            nextIndex: i
+          };
+        }
+
         i++;
 
         // 后缀
@@ -1281,7 +1343,7 @@
           }
           
           // 必须是数字
-          if (i >= line.length || !/[0-7]/.test(line[i])) return null;
+          if (i >= line.length || !/[1-7]/.test(line[i])) return null;
           const digit = line[i];
           i++;
           
@@ -1329,6 +1391,98 @@
 
         return {
           tokens: graceTokens,
+          nextIndex: i
+        };
+      }
+
+      parseTuplet(line, start) {
+        // 格式：{N:音符序列}，如 {3:1/ 2/ 3/} 或 {3:1/2/3/}
+        const match = line.slice(start).match(/^\{(\d+):/);
+        if (!match) return null;
+        const tupletNumber = parseInt(match[1]);
+        if (tupletNumber < 2) return null;
+        let i = start + match[0].length;
+
+        const tokens = [];
+        while (i < line.length && line[i] !== '}') {
+          const ch = line[i];
+
+          // 空格跳过
+          if (ch === ' ' || ch === '\t') {
+            i++;
+            continue;
+          }
+
+          // 音符
+          if (/[1-7]/.test(ch) || ch === '^' || ch === '_') {
+            const note = this.parseNote(line, i);
+            tokens.push(note.token);
+            i = note.nextIndex;
+            continue;
+          }
+
+          // 休止符 0
+          if (ch === '0') {
+            let hasDot = false;
+            let underlines = 0;
+            let i2 = i + 1;
+            while (i2 < line.length && (line[i2] === '.' || line[i2] === '/' || line[i2] === '=')) {
+              if (line[i2] === '.') hasDot = true;
+              if (line[i2] === '/') underlines++;
+              if (line[i2] === '=') underlines += 2;
+              i2++;
+            }
+            tokens.push({
+              type: 'rest',
+              digit: '0',
+              duration: this.calculateDuration(underlines, hasDot),
+              underlines: underlines,
+              hasDot: hasDot
+            });
+            i = i2;
+            continue;
+          }
+
+          // 遇到无法解析的字符，终止解析
+          break;
+        }
+
+        // 必须有右括号
+        if (i >= line.length || line[i] !== '}') return null;
+        i++; // 跳过 }
+
+        if (tokens.length === 0) return null;
+
+        // 计算标准总时值
+        let standardTotal = 0;
+        for (const t of tokens) {
+          if (t.type === 'note' || t.type === 'rest') {
+            standardTotal += t.duration;
+          }
+        }
+        if (standardTotal === 0) return null;
+
+        // N连音实际总时值 = 标准总时值 × (N-1) / N
+        // 例如三连音：3个八分音符标准总时值=1.5，实际=1.0
+        const actualTotal = standardTotal * (tupletNumber - 1) / tupletNumber;
+        const ratio = actualTotal / standardTotal;
+
+        const groupId = 'tuplet_' + tupletNumber + '_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        for (let idx = 0; idx < tokens.length; idx++) {
+          const t = tokens[idx];
+          if (t.type === 'note' || t.type === 'rest') {
+            t.duration *= ratio;
+            t.tuplet = {
+              number: tupletNumber,
+              index: idx,
+              count: tokens.length,
+              groupId: groupId
+            };
+          }
+        }
+
+        return {
+          tokens: tokens,
           nextIndex: i
         };
       }
@@ -1559,6 +1713,14 @@
             const note = measure.notes[i];
             const pos = notePositions[i];
 
+            // 画连音（三连音等）弧线
+            if (note.tuplet && note.tuplet.index === 0) {
+              const endIdx = i + note.tuplet.count - 1;
+              if (endIdx < notePositions.length) {
+                this.renderTupletBracket(ctx, pos, notePositions[endIdx], y, note.tuplet.number);
+              }
+            }
+
             if (note.type === 'note') {
               const group = noteGroups.find(g => g.indices.includes(i));
               this.renderNote(ctx, note, pos.x, y, group, notePositions, i);
@@ -1653,6 +1815,8 @@
       getNoteWeight(note) {
         if (note.type === 'grace') return 0.3; // 倚音占很小宽度
         if (note.type === 'rest') return note.duration;
+        // 连音（三连音等）成员按实际时值精确计算宽度
+        if (note.tuplet) return note.duration;
         // duration >= 1 是四分或更长
         if (note.duration >= 1) return 1;
         if (note.duration >= 0.5) return 0.7; // 八分音符组占 0.7 宽度
@@ -1671,9 +1835,11 @@
           const note = notes[i];
           if (note.type === 'note' && note.underlines > 0) {
             // 检查是否可以加入当前组
-            const canJoin = currentGroup &&
-              !this.isGroupFull(currentGroup, note) &&
-              this.isCompatible(currentGroup, note);
+            let canJoin = currentGroup && this.isCompatible(currentGroup, note);
+            // 连音组内的音符不受1拍限制，保证整组下划线连续
+            if (canJoin && !note.tuplet) {
+              canJoin = !this.isGroupFull(currentGroup, note);
+            }
 
             if (!canJoin) {
               // 开始新组
@@ -1703,7 +1869,13 @@
 
       isCompatible(group, note) {
         // 兼容性检查：相邻的短音符可以混合分组
-        // 只要组还没满，就可以加入
+        // 连音组内外的音符不能混组
+        const lastNote = group.notes[group.notes.length - 1];
+        if (lastNote.tuplet || note.tuplet) {
+          const a = lastNote.tuplet ? lastNote.tuplet.groupId : null;
+          const b = note.tuplet ? note.tuplet.groupId : null;
+          return a === b;
+        }
         return true;
       }
 
@@ -1987,6 +2159,29 @@
         ctx.stroke();
       }
 
+      renderTupletBracket(ctx, startPos, endPos, y, number) {
+        const size = 20;
+        const startX = startPos.x - size * 0.3;
+        const endX = endPos.x + size * 0.3;
+        const midX = (startX + endX) / 2;
+        const baseY = y - size * 1.4; // 在音符上方，比高音点还高
+
+        // 画弧线
+        ctx.strokeStyle = '#1a1a2e';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(startX, baseY + 6);
+        ctx.quadraticCurveTo(midX, baseY - 8, endX, baseY + 6);
+        ctx.stroke();
+
+        // 画数字
+        ctx.fillStyle = '#1a1a2e';
+        ctx.font = `bold ${size * 0.75}px "Segoe UI", "PingFang SC", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(number.toString(), midX, baseY - 2);
+      }
+
       renderGroupBeams(ctx, notes, notePositions, group, y) {
         const size = 20;
         const underlineHeight = 2;
@@ -2109,7 +2304,11 @@
         ctx.textBaseline = 'middle';
 
         // 休止符用特殊符号或横线表示
-        if (note.duration >= 1) {
+        if (note.digit === '0') {
+          // 休止符 0
+          ctx.font = `bold ${size}px "Segoe UI", "PingFang SC", sans-serif`;
+          ctx.fillText('0', x, y);
+        } else if (note.duration >= 1) {
           // 全休止符/二分休止符/增时线 - 用横线表示
           ctx.strokeStyle = '#1a1a2e';
           ctx.lineWidth = 2;
@@ -2232,6 +2431,19 @@
                   digit: note.digit,
                   octave: note.octave
                 });
+              }
+            } else if (note.type === 'rest') {
+              // 增时线：延长前一个实际音符的时值
+              if (note.isExtension) {
+                let j = i - 1;
+                while (j >= 0 && measure.notes[j].type === 'grace') j--;
+                if (j >= 0 && measure.notes[j].type === 'note') {
+                  let k = notes.length - 1;
+                  while (k >= 0 && notes[k].isGrace) k--;
+                  if (k >= 0) {
+                    notes[k].duration += duration;
+                  }
+                }
               }
             }
             time += duration;
