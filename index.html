@@ -1475,20 +1475,20 @@
         ctx.font = `bold ${size}px "Segoe UI", "PingFang SC", sans-serif`;
         ctx.fillText(note.digit, x + xOffset, noteY);
 
-        // 高音点（上方）—— 基于统一基线向上画
+        // 高音点（上方）—— 基于统一基线向上画，距离加大
         if (note.octave > 0) {
           for (let i = 0; i < note.octave; i++) {
             ctx.beginPath();
-            ctx.arc(x + xOffset, noteY - size * 0.5 - i * 8, dotRadius, 0, Math.PI * 2);
+            ctx.arc(x + xOffset, noteY - size * 0.75 - i * 10, dotRadius, 0, Math.PI * 2);
             ctx.fill();
           }
         }
 
-        // 低音点（下方）—— 基于统一基线向下画
+        // 低音点（下方）—— 基于统一基线向下画，距离加大
         if (note.octave < 0) {
           for (let i = 0; i < Math.abs(note.octave); i++) {
             ctx.beginPath();
-            ctx.arc(x + xOffset, noteY + size * 0.5 + i * 8, dotRadius, 0, Math.PI * 2);
+            ctx.arc(x + xOffset, noteY + size * 0.75 + i * 10, dotRadius, 0, Math.PI * 2);
             ctx.fill();
           }
         }
