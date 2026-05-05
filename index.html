@@ -1155,80 +1155,57 @@
       }
 
       layoutMeasures(measures, maxPerLine) {
-        // 均匀分配小节到每行，让每行小节数尽量相同
-        // 这样每行起始位置对齐，视觉效果更整齐
-        const totalMeasures = measures.length;
-        if (totalMeasures === 0) return [];
-
-        // 计算每行最多几个小节：尽量让每行不少于2个，不超过maxPerLine
-        // 优先让每行小节数相同或接近
-        let numLines = Math.ceil(totalMeasures / maxPerLine);
-        if (numLines < 1) numLines = 1;
-
-        // 重新计算每行小节数，尽量均匀分配
-        const baseCount = Math.floor(totalMeasures / numLines);
-        const remainder = totalMeasures % numLines;
-
         const lines = [];
-        let idx = 0;
-        for (let i = 0; i < numLines; i++) {
-          const count = baseCount + (i < remainder ? 1 : 0);
-          if (count > 0) {
-            lines.push(measures.slice(idx, idx + count));
-            idx += count;
+        let currentLine = [];
+        let currentCount = 0;
+
+        for (const measure of measures) {
+          const noteCount = measure.notes.filter(n => n.type === 'note').length;
+          if (currentCount + noteCount > maxPerLine && currentLine.length > 0) {
+            lines.push(currentLine);
+            currentLine = [measure];
+            currentCount = noteCount;
+          } else {
+            currentLine.push(measure);
+            currentCount += noteCount;
           }
+        }
+
+        if (currentLine.length > 0) {
+          lines.push(currentLine);
         }
 
         return lines;
       }
 
       renderLine(ctx, lineMeasures, x, y, availableWidth) {
-        // 新布局策略：
-        // 1. 先计算每小节的总时值权重
-        // 2. 按小节权重比例分配每小节的总宽度
-        // 3. 小节内部再按音符权重分配位置
-        // 这样同一个小节在不同行宽度一致，行与行对齐
-
-        const measureWeights = [];
-        let lineTotalWeight = 0;
+        // 计算总时值权重：四分音符=1, 八分=0.7, 十六分=0.5
+        let totalWeight = 0;
         for (const measure of lineMeasures) {
-          let mw = 0;
           for (const note of measure.notes) {
-            mw += this.getNoteWeight(note);
+            totalWeight += this.getNoteWeight(note);
           }
-          measureWeights.push(mw);
-          lineTotalWeight += mw;
         }
 
-        // 计算每小节的分配宽度（按权重比例）
-        const measureWidths = [];
-        const usedWidth = 0;
-        for (let i = 0; i < lineMeasures.length; i++) {
-          const ratio = measureWeights[i] / lineTotalWeight;
-          const width = availableWidth * ratio;
-          measureWidths.push(width);
-        }
-
-        // 渲染每小节
+        // 计算基础宽度，但限制最大宽度避免单小节过度拉伸
+        const rawBaseWidth = availableWidth / Math.max(totalWeight, 1);
+        const MAX_NOTE_WIDTH = 50; // 四分音符最大宽度限制
+        const baseWidth = Math.min(rawBaseWidth, MAX_NOTE_WIDTH);
         let currentX = x;
+
         for (let m = 0; m < lineMeasures.length; m++) {
           const measure = lineMeasures[m];
-          const measureWidth = measureWidths[m];
           const isLast = m === lineMeasures.length - 1;
 
           // 识别需要连线的音符组
           const noteGroups = this.groupShortNotes(measure.notes);
-
-          // 计算小节内基础单位宽度
-          const measureWeight = measureWeights[m];
-          const unitWidth = measureWidth / Math.max(measureWeight, 1);
 
           // 预计算每个音符的位置
           const notePositions = [];
           let tempX = currentX;
           for (let i = 0; i < measure.notes.length; i++) {
             const note = measure.notes[i];
-            const noteWidth = unitWidth * this.getNoteWeight(note);
+            const noteWidth = baseWidth * this.getNoteWeight(note);
             notePositions.push({
               x: tempX + noteWidth / 2,
               width: noteWidth,
@@ -1244,6 +1221,7 @@
             const pos = notePositions[i];
 
             if (note.type === 'note') {
+              // 找到这个音符属于哪个组
               const group = noteGroups.find(g => g.indices.includes(i));
               this.renderNote(ctx, note, pos.x, y, group, notePositions, i);
             } else if (note.type === 'rest') {
@@ -1259,7 +1237,7 @@
           }
 
           // 更新 currentX 到小节末尾
-          currentX += measureWidth;
+          currentX = tempX;
 
           // 小节线
           ctx.strokeStyle = '#1a1a2e';
@@ -1269,12 +1247,19 @@
           ctx.lineTo(currentX, y + 15);
           ctx.stroke();
 
-          // 如果是最后一小节，画终止双线
-          if (isLast && measure.isEnd) {
+          // 终止双竖线
+          if (measure.isDouble && isLast) {
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo(currentX + 6, y - 25);
-            ctx.lineTo(currentX + 6, y + 15);
+            ctx.moveTo(currentX + 3, y - 25);
+            ctx.lineTo(currentX + 3, y + 15);
+            ctx.stroke();
+
+            // 粗线
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(currentX + 8, y - 25);
+            ctx.lineTo(currentX + 8, y + 15);
             ctx.stroke();
           }
         }
