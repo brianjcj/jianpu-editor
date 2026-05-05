@@ -1158,6 +1158,16 @@
             continue;
           }
 
+          // 倚音：括号内的音符，如 (3) 或 (^5)
+          if (ch === '(') {
+            const grace = this.parseGraceNote(line, i);
+            if (grace) {
+              tokens.push(grace.token);
+              i = grace.nextIndex;
+              continue;
+            }
+          }
+
           // 音符（包括带 ^ 高音前缀和 _ 低音前缀的）
           if (/[0-7]/.test(ch) || ch === '^' || ch === '_') {
             const note = this.parseNote(line, i);
@@ -1243,6 +1253,46 @@
             underlines: underlines,
             hasDot: hasDot,
             isTie: isTie
+          },
+          nextIndex: i
+        };
+      }
+
+      parseGraceNote(line, start) {
+        if (line[start] !== '(') return null;
+        let i = start + 1;
+        
+        // 解析括号内的音符（支持 ^ _ 前缀）
+        let octave = 0;
+        while (i < line.length && (line[i] === '^' || line[i] === '_')) {
+          if (line[i] === '^') octave++;
+          if (line[i] === '_') octave--;
+          i++;
+        }
+        
+        // 必须是数字
+        if (i >= line.length || !/[0-7]/.test(line[i])) return null;
+        const digit = line[i];
+        i++;
+        
+        // 后缀（升降号）
+        let accidental = '';
+        if (i < line.length && (line[i] === '#' || line[i] === 'b')) {
+          accidental = line[i];
+          i++;
+        }
+        
+        // 必须有右括号
+        if (i >= line.length || line[i] !== ')') return null;
+        i++; // 跳过 )
+        
+        return {
+          token: {
+            type: 'grace',
+            digit: digit,
+            octave: octave,
+            accidental: accidental,
+            duration: 0.125 // 三十二分音符时值，用于播放
           },
           nextIndex: i
         };
@@ -1334,8 +1384,29 @@
         y += 25;
 
         // 渲染每行
-        for (const line of lines) {
-          this.renderLine(ctx, line, MARGIN_X, y, A4_WIDTH - MARGIN_X * 2);
+        // 先计算前面行的平均小节宽度，作为最后一行的限制
+        let avgMeasureWidth = null;
+        if (lines.length > 1) {
+          let totalWidth = 0;
+          let totalCount = 0;
+          for (let i = 0; i < lines.length - 1; i++) {
+            const line = lines[i];
+            const lineAvailableWidth = A4_WIDTH - MARGIN_X * 2;
+            const perMeasureWidth = lineAvailableWidth / line.length;
+            totalWidth += perMeasureWidth;
+            totalCount += 1;
+          }
+          avgMeasureWidth = totalWidth / totalCount;
+        }
+        
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          // 最后一行（小节数明显少于前面的行）限制最大小节宽度
+          const isLastLine = (i === lines.length - 1);
+          const useMaxWidth = (isLastLine && avgMeasureWidth !== null && line.length < lines[0].length)
+            ? avgMeasureWidth * 1.2  // 允许稍微宽一点，但不铺满
+            : null;
+          this.renderLine(ctx, line, MARGIN_X, y, A4_WIDTH - MARGIN_X * 2, useMaxWidth);
           y += lineHeight;
         }
 
@@ -1381,7 +1452,7 @@
         return lines;
       }
 
-      renderLine(ctx, lineMeasures, x, y, availableWidth) {
+      renderLine(ctx, lineMeasures, x, y, availableWidth, maxMeasureWidth = null) {
         // 新布局策略：
         // 1. 计算每小节的总时值权重
         // 2. 按小节权重比例分配每小节的总宽度
@@ -1403,7 +1474,11 @@
         const measureWidths = [];
         for (let i = 0; i < lineMeasures.length; i++) {
           const ratio = measureWeights[i] / lineTotalWeight;
-          const width = availableWidth * ratio;
+          let width = availableWidth * ratio;
+          // 如果限制了最大小节宽度，则不超过该限制
+          if (maxMeasureWidth !== null) {
+            width = Math.min(width, maxMeasureWidth);
+          }
           measureWidths.push(width);
         }
 
@@ -1444,8 +1519,18 @@
             if (note.type === 'note') {
               const group = noteGroups.find(g => g.indices.includes(i));
               this.renderNote(ctx, note, pos.x, y, group, notePositions, i);
+              // 如果前一个音符是倚音，在这里渲染它（依附于当前主音）
+              if (i > 0 && measure.notes[i - 1].type === 'grace') {
+                this.renderGraceNote(ctx, measure.notes[i - 1], pos.x, y);
+              }
             } else if (note.type === 'rest') {
               this.renderRest(ctx, note, pos.x, y, pos.width);
+            } else if (note.type === 'grace') {
+              // 倚音本身不在这里渲染，而是在下一个主音位置渲染
+              // 但如果倚音在最后一个位置（没有后续主音），则独立渲染
+              if (i === measure.notes.length - 1) {
+                this.renderGraceNote(ctx, note, pos.x, y);
+              }
             }
           }
 
@@ -1498,6 +1583,7 @@
       }
 
       getNoteWeight(note) {
+        if (note.type === 'grace') return 0.3; // 倚音占很小宽度
         if (note.type === 'rest') return note.duration;
         // duration >= 1 是四分或更长
         if (note.duration >= 1) return 1;
@@ -1635,6 +1721,58 @@
             ctx.stroke();
           }
         }
+      }
+
+      renderGraceNote(ctx, note, x, y) {
+        const size = 14; // 小字号
+        const dotRadius = 2;
+
+        ctx.fillStyle = '#1a1a2e';
+        ctx.font = `bold ${size}px "Segoe UI", "PingFang SC", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // 倚音在主音左上方
+        const graceX = x - size * 0.8;
+        const graceY = y - size * 1.2;
+
+        // 升降号
+        let xOffset = 0;
+        if (note.accidental) {
+          ctx.font = `${size * 0.7}px "Segoe UI", sans-serif`;
+          ctx.fillText(note.accidental === '#' ? '♯' : '♭', graceX - size * 0.5, graceY);
+          xOffset = size * 0.2;
+        }
+
+        // 数字
+        ctx.font = `bold ${size}px "Segoe UI", "PingFang SC", sans-serif`;
+        ctx.fillText(note.digit, graceX + xOffset, graceY);
+
+        // 高音点
+        if (note.octave > 0) {
+          for (let i = 0; i < note.octave; i++) {
+            ctx.beginPath();
+            ctx.arc(graceX + xOffset, graceY - size * 0.75 - i * 7, dotRadius, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // 低音点
+        if (note.octave < 0) {
+          for (let i = 0; i < Math.abs(note.octave); i++) {
+            ctx.beginPath();
+            ctx.arc(graceX + xOffset, graceY + size * 0.75 + i * 7, dotRadius, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // 小斜线（短倚音标记）
+        ctx.strokeStyle = '#1a1a2e';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(graceX + size * 0.3, graceY - size * 0.8);
+        ctx.lineTo(graceX - size * 0.5, graceY + size * 0.3);
+        ctx.stroke();
       }
 
       renderTie(ctx, startPos, endPos, y, note) {
