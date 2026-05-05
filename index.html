@@ -525,8 +525,128 @@
       border-bottom: none;
     }
 
-    .syntax-help {
-      display: none !important;
+    /* 简谱虚拟键盘 */
+    .jianpu-keyboard {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .keyboard-row {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+    }
+
+    .kb-btn {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-light);
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .kb-btn:active {
+      transform: scale(0.92);
+      background: var(--primary-container);
+      color: var(--primary);
+    }
+
+    .kb-note {
+      width: 40px;
+      height: 44px;
+      font-size: 18px;
+      background: #fff;
+      border-color: #d0d7de;
+    }
+
+    .kb-note:active {
+      background: var(--primary-container);
+      border-color: var(--primary);
+    }
+
+    .kb-modifier {
+      width: 40px;
+      height: 44px;
+      font-size: 16px;
+      color: var(--text-muted);
+      background: #f5f7fa;
+    }
+
+    .kb-modifier:active {
+      background: var(--primary-container);
+      color: var(--primary);
+    }
+
+    .kb-bar {
+      width: 44px;
+      height: 44px;
+      font-size: 14px;
+      background: #f0f4f8;
+      color: var(--accent);
+    }
+
+    .kb-bar:active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .kb-space {
+      width: 60px;
+      height: 44px;
+      font-size: 12px;
+      color: var(--text-muted);
+      background: #f5f7fa;
+    }
+
+    .kb-backspace {
+      width: 56px;
+      height: 44px;
+      font-size: 16px;
+      color: var(--error);
+      background: #fef2f2;
+      border-color: #fecaca;
+    }
+
+    .kb-backspace:active {
+      background: var(--error);
+      color: #fff;
+    }
+
+    /* 移动端键盘适配 */
+    @media (max-width: 768px) {
+      .kb-note, .kb-modifier, .kb-bar {
+        width: 36px;
+        height: 40px;
+        font-size: 15px;
+      }
+
+      .kb-space {
+        width: 50px;
+        height: 40px;
+      }
+
+      .kb-backspace {
+        width: 48px;
+        height: 40px;
+      }
+
+      .jianpu-keyboard {
+        padding: 6px 8px;
+        gap: 4px;
+      }
     }
 
     /* ===== Preview Panel ===== */
@@ -825,30 +945,33 @@
 ^1 ^2 ^3 | ^5 ^6 ^5 | ^3 ^2 ^1 ||
 
 点击右侧「示例」按钮加载完整demo"></textarea>
-      <div class="syntax-help panel-hidden">
-        <div class="syntax-help-header">
-          <h4>标记语法速查</h4>
-          <button class="syntax-help-close" id="btnCloseSyntax">✕</button>
+      <!-- 简谱虚拟键盘 -->
+      <div class="jianpu-keyboard" id="jianpuKeyboard">
+        <div class="keyboard-row">
+          <button class="kb-btn kb-modifier" data-char="^" title="高音">^</button>
+          <button class="kb-btn kb-modifier" data-char="_" title="低音">_</button>
+          <button class="kb-btn kb-note" data-char="1">1</button>
+          <button class="kb-btn kb-note" data-char="2">2</button>
+          <button class="kb-btn kb-note" data-char="3">3</button>
+          <button class="kb-btn kb-note" data-char="4">4</button>
+          <button class="kb-btn kb-note" data-char="5">5</button>
+          <button class="kb-btn kb-note" data-char="6">6</button>
+          <button class="kb-btn kb-note" data-char="7">7</button>
+          <button class="kb-btn kb-note" data-char="0" title="休止符">0</button>
+          <button class="kb-btn kb-bar" data-char="|" title="小节线">|</button>
+          <button class="kb-btn kb-bar" data-char="||" title="终止线">||</button>
         </div>
-        <table>
-          <tr><td><code>1-7</code></td><td>中音 do re mi fa sol la si</td></tr>
-          <tr><td><code>^1-^7</code></td><td>高音（上方加点）</td></tr>
-          <tr><td><code>_1-_7</code></td><td>低音（下方加点）</td></tr>
-          <tr><td><code>-</code></td><td>增时线（延长前一音符时值）</td></tr>
-          <tr><td><code>| - |</code></td><td>小节内独立休止符</td></tr>
-          <tr><td><code>|</code></td><td>小节线</td></tr>
-          <tr><td><code>||</code></td><td>终止线（双竖线）</td></tr>
-          <tr><td><code>1~</code></td><td>连音线（tie，连接下一个同音高音符）</td></tr>
-          <tr><td><code>1#</code></td><td>升半音</td></tr>
-          <tr><td><code>1b</code></td><td>降半音</td></tr>
-          <tr><td><code>1.</code></td><td>附点音符（时值×1.5）</td></tr>
-          <tr><td><code>1/</code></td><td>下划线（八分音符）</td></tr>
-          <tr><td><code>1//</code></td><td>双下划线（十六分音符）</td></tr>
-          <tr><td><code>1=</code></td><td>延长线下划线</td></tr>
-          <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
-          <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
-          <tr><td><code># 注释</code></td><td>行注释</td></tr>
-        </table>
+        <div class="keyboard-row">
+          <button class="kb-btn kb-modifier" data-char="#" title="升号">#</button>
+          <button class="kb-btn kb-modifier" data-char="b" title="降号">b</button>
+          <button class="kb-btn kb-modifier" data-char="." title="附点">.</button>
+          <button class="kb-btn kb-modifier" data-char="/" title="八分音符">/</button>
+          <button class="kb-btn kb-modifier" data-char="=" title="十六分音符">=</button>
+          <button class="kb-btn kb-modifier" data-char="-" title="增时线/休止符">−</button>
+          <button class="kb-btn kb-modifier" data-char="~" title="连音线">~</button>
+          <button class="kb-btn kb-space" data-char=" " title="空格">␣</button>
+          <button class="kb-btn kb-backspace" data-char="BACKSPACE" title="退格">⌫</button>
+        </div>
       </div>
       
       <!-- 语法提示弹窗 -->
@@ -2049,7 +2172,39 @@
       }
     });
 
-    // 面板状态 - 与HTML初始状态保持一致
+    // 简谱虚拟键盘事件
+    const keyboard = document.getElementById('jianpuKeyboard');
+    const editor = document.getElementById('editor');
+
+    keyboard.addEventListener('click', (e) => {
+      const btn = e.target.closest('.kb-btn');
+      if (!btn) return;
+
+      e.preventDefault();
+      const char = btn.dataset.char;
+
+      if (char === 'BACKSPACE') {
+        // 退格：删除光标前一个字符
+        const start = editor.selectionStart;
+        const end = editor.selectionEnd;
+        if (start > 0) {
+          const text = editor.value;
+          editor.value = text.slice(0, start - 1) + text.slice(end);
+          editor.selectionStart = editor.selectionEnd = start - 1;
+        }
+      } else {
+        // 插入字符到光标位置
+        const start = editor.selectionStart;
+        const end = editor.selectionEnd;
+        const text = editor.value;
+        editor.value = text.slice(0, start) + char + text.slice(end);
+        editor.selectionStart = editor.selectionEnd = start + char.length;
+      }
+
+      // 触发输入事件，让预览自动更新
+      editor.dispatchEvent(new Event('input'));
+      editor.focus();
+    });
     const panelStates = {
       editor: true,
       syntax: false,
