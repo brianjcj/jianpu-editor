@@ -1119,7 +1119,7 @@
                 measures.push({ notes: currentMeasure, isDouble: token.isDouble });
                 currentMeasure = [];
               }
-            } else if (token.type === 'note' || token.type === 'rest') {
+            } else if (token.type === 'note' || token.type === 'rest' || token.type === 'grace') {
               currentMeasure.push(token);
             }
           }
@@ -1162,7 +1162,7 @@
           if (ch === '(') {
             const grace = this.parseGraceNote(line, i);
             if (grace) {
-              tokens.push(grace.token);
+              tokens.push(...grace.tokens);
               i = grace.nextIndex;
               continue;
             }
@@ -1261,39 +1261,72 @@
       parseGraceNote(line, start) {
         if (line[start] !== '(') return null;
         let i = start + 1;
-        
-        // 解析括号内的音符（支持 ^ _ 前缀）
-        let octave = 0;
-        while (i < line.length && (line[i] === '^' || line[i] === '_')) {
-          if (line[i] === '^') octave++;
-          if (line[i] === '_') octave--;
+        const graceTokens = [];
+
+        while (i < line.length && line[i] !== ')') {
+          // 跳过空格
+          if (line[i] === ' ' || line[i] === '\t') {
+            i++;
+            continue;
+          }
+
+          // 解析括号内的音符（支持 ^ _ 前缀）
+          let octave = 0;
+          while (i < line.length && (line[i] === '^' || line[i] === '_')) {
+            if (line[i] === '^') octave++;
+            if (line[i] === '_') octave--;
+            i++;
+          }
+          
+          // 必须是数字
+          if (i >= line.length || !/[0-7]/.test(line[i])) return null;
+          const digit = line[i];
           i++;
-        }
-        
-        // 必须是数字
-        if (i >= line.length || !/[0-7]/.test(line[i])) return null;
-        const digit = line[i];
-        i++;
-        
-        // 后缀（升降号）
-        let accidental = '';
-        if (i < line.length && (line[i] === '#' || line[i] === 'b')) {
-          accidental = line[i];
-          i++;
-        }
-        
-        // 必须有右括号
-        if (i >= line.length || line[i] !== ')') return null;
-        i++; // 跳过 )
-        
-        return {
-          token: {
+          
+          // 后缀（升降号）
+          let accidental = '';
+          if (i < line.length && (line[i] === '#' || line[i] === 'b')) {
+            accidental = line[i];
+            i++;
+          }
+
+          // 解析下划线（八分/十六分音符），支持括号内写法如 (3/)
+          let underlines = 0;
+          while (i < line.length && (line[i] === '/' || line[i] === '=')) {
+            if (line[i] === '/') underlines++;
+            if (line[i] === '=') underlines += 2;
+            i++;
+          }
+
+          graceTokens.push({
             type: 'grace',
             digit: digit,
             octave: octave,
             accidental: accidental,
+            underlines: underlines,
             duration: 0.125 // 三十二分音符时值，用于播放
-          },
+          });
+        }
+
+        // 必须有右括号
+        if (i >= line.length || line[i] !== ')') return null;
+        i++; // 跳过 )
+
+        // 右括号后也可以有下划线，兼容 (3)/ 写法
+        let trailingUnderlines = 0;
+        while (i < line.length && (line[i] === '/' || line[i] === '=')) {
+          if (line[i] === '/') trailingUnderlines++;
+          if (line[i] === '=') trailingUnderlines += 2;
+          i++;
+        }
+        if (trailingUnderlines > 0) {
+          graceTokens.forEach(t => t.underlines += trailingUnderlines);
+        }
+
+        if (graceTokens.length === 0) return null;
+
+        return {
+          tokens: graceTokens,
           nextIndex: i
         };
       }
@@ -1499,11 +1532,17 @@
           // 预计算每个音符的位置
           const notePositions = [];
           let tempX = currentX;
+          const firstNoteSize = 20; // 与 renderNote 中的字号一致
           for (let i = 0; i < measure.notes.length; i++) {
             const note = measure.notes[i];
             const noteWidth = unitWidth * this.getNoteWeight(note);
+            let noteX = tempX + noteWidth / 2;
+            // 每行第一个音符左对齐，消除左侧留白，使各行开头对齐
+            if (m === 0 && i === 0 && noteWidth >= firstNoteSize) {
+              noteX = tempX + firstNoteSize / 2;
+            }
             notePositions.push({
-              x: tempX + noteWidth / 2,
+              x: noteX,
               width: noteWidth,
               left: tempX,
               right: tempX + noteWidth
@@ -1519,9 +1558,21 @@
             if (note.type === 'note') {
               const group = noteGroups.find(g => g.indices.includes(i));
               this.renderNote(ctx, note, pos.x, y, group, notePositions, i);
-              // 如果前一个音符是倚音，在这里渲染它（依附于当前主音）
-              if (i > 0 && measure.notes[i - 1].type === 'grace') {
-                this.renderGraceNote(ctx, measure.notes[i - 1], pos.x, y);
+              // 如果前面有倚音，在这里渲染所有连续倚音（依附于当前主音）
+              let graceCount = 0;
+              for (let j = i - 1; j >= 0 && measure.notes[j].type === 'grace'; j--) {
+                graceCount++;
+              }
+              if (graceCount > 0) {
+                const gSize = 14;
+                const graceNotes = [];
+                const graceXs = [];
+                for (let k = 0; k < graceCount; k++) {
+                  const graceIndex = i - graceCount + k;
+                  graceNotes.push(measure.notes[graceIndex]);
+                  graceXs.push(pos.x - (graceCount - k) * gSize * 0.9);
+                }
+                this.renderGraceGroup(ctx, graceNotes, graceXs, y, pos.x);
               }
             } else if (note.type === 'rest') {
               this.renderRest(ctx, note, pos.x, y, pos.width);
@@ -1529,7 +1580,20 @@
               // 倚音本身不在这里渲染，而是在下一个主音位置渲染
               // 但如果倚音在最后一个位置（没有后续主音），则独立渲染
               if (i === measure.notes.length - 1) {
-                this.renderGraceNote(ctx, note, pos.x, y);
+                // 收集所有尾部连续的倚音
+                let tailStart = i;
+                while (tailStart >= 0 && measure.notes[tailStart].type === 'grace') tailStart--;
+                tailStart++;
+                const tailCount = i - tailStart + 1;
+                const gSize = 14;
+                const graceNotes = [];
+                const graceXs = [];
+                for (let k = 0; k < tailCount; k++) {
+                  const graceIndex = tailStart + k;
+                  graceNotes.push(measure.notes[graceIndex]);
+                  graceXs.push(pos.x - (tailCount - k) * gSize * 0.9);
+                }
+                this.renderGraceGroup(ctx, graceNotes, graceXs, y);
               }
             }
           }
@@ -1723,7 +1787,7 @@
         }
       }
 
-      renderGraceNote(ctx, note, x, y) {
+      renderGraceNote(ctx, note, x, y, mainNoteX) {
         const size = 14; // 小字号
         const dotRadius = 2;
 
@@ -1766,13 +1830,133 @@
           }
         }
 
-        // 小斜线（短倚音标记）
+        // 下划线（八分/十六分音符）
+        if (note.underlines > 0) {
+          ctx.strokeStyle = '#1a1a2e';
+          ctx.lineWidth = 1.2;
+          const lineY = graceY + size * 0.4 + 1;
+          const lineWidth = size * 0.6;
+
+          for (let i = 0; i < note.underlines; i++) {
+            ctx.beginPath();
+            ctx.moveTo(graceX + xOffset - lineWidth / 2, lineY + i * 3);
+            ctx.lineTo(graceX + xOffset + lineWidth / 2, lineY + i * 3);
+            ctx.stroke();
+          }
+        }
+
+        // 倚音连接线：从倚音下方垂直向下，再水平向右连到主音符头部
         ctx.strokeStyle = '#1a1a2e';
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1.2;
+        const lineStartX = graceX + xOffset;
+        const lineStartY = graceY + size * 0.5;
+        const lineEndY = y; // 连到主音符头部
+        const r = 3; // 拐角圆弧半径
         ctx.beginPath();
-        ctx.moveTo(graceX + size * 0.3, graceY - size * 0.8);
-        ctx.lineTo(graceX - size * 0.5, graceY + size * 0.3);
+        ctx.moveTo(lineStartX, lineStartY);
+        ctx.lineTo(lineStartX, lineEndY + r);
+        ctx.arc(lineStartX + r, lineEndY + r, r, Math.PI, Math.PI * 1.5, true);
+        ctx.lineTo(mainNoteX || x, lineEndY);
         ctx.stroke();
+      }
+
+      renderGraceGroup(ctx, notes, xs, y, mainNoteX) {
+        const size = 14;
+        const dotRadius = 2;
+
+        ctx.fillStyle = '#1a1a2e';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const graceY = y - size * 1.2;
+
+        for (let idx = 0; idx < notes.length; idx++) {
+          const note = notes[idx];
+          const graceX = xs[idx] - size * 0.8;
+          let xOffset = 0;
+
+          if (note.accidental) {
+            ctx.font = `${size * 0.7}px "Segoe UI", sans-serif`;
+            ctx.fillText(note.accidental === '#' ? '♯' : '♭', graceX - size * 0.5, graceY);
+            xOffset = size * 0.2;
+          }
+
+          ctx.font = `bold ${size}px "Segoe UI", "PingFang SC", sans-serif`;
+          ctx.fillText(note.digit, graceX + xOffset, graceY);
+
+          if (note.octave > 0) {
+            for (let i = 0; i < note.octave; i++) {
+              ctx.beginPath();
+              ctx.arc(graceX + xOffset, graceY - size * 0.75 - i * 7, dotRadius, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+
+          if (note.octave < 0) {
+            for (let i = 0; i < Math.abs(note.octave); i++) {
+              ctx.beginPath();
+              ctx.arc(graceX + xOffset, graceY + size * 0.75 + i * 7, dotRadius, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
+
+        if (notes.some(n => n.underlines > 0)) {
+          ctx.strokeStyle = '#1a1a2e';
+          ctx.lineWidth = 1.2;
+          const baseLineY = graceY + size * 0.4 + 1;
+          const lineSpacing = 3;
+
+          for (let line = 0; line < 2; line++) {
+            const required = line + 1;
+            let segStart = -1;
+            for (let idx = 0; idx <= notes.length; idx++) {
+              const hasLine = idx < notes.length && notes[idx].underlines >= required;
+              if (hasLine && segStart === -1) {
+                segStart = idx;
+              } else if ((!hasLine || idx === notes.length) && segStart !== -1) {
+                const segEnd = idx - 1;
+                const startX = xs[segStart] - size * 0.8;
+                const endX = xs[segEnd] - size * 0.8;
+                const lineY = baseLineY + line * lineSpacing;
+                ctx.beginPath();
+                ctx.moveTo(startX - size * 0.3, lineY);
+                ctx.lineTo(endX + size * 0.3, lineY);
+                ctx.stroke();
+                segStart = -1;
+              }
+            }
+          }
+        }
+
+        if (mainNoteX !== undefined && notes.length > 0) {
+          // 1) 从整组倚音的 X 中心开始
+          const groupStartX = xs[0] - size * 0.8;
+          const groupEndX = xs[xs.length - 1] - size * 0.8;
+          const startX = (groupStartX + groupEndX) / 2;
+
+          // 2) 起点在下划线下方，不穿过下划线
+          const maxUnderlines = Math.max(...notes.map(n => n.underlines));
+          const baseLineY = graceY + size * 0.4 + 1;
+          const startY = maxUnderlines > 0
+            ? baseLineY + (maxUnderlines - 1) * 3 + 4
+            : graceY + size * 0.6;
+
+          // 3) 终点留 margin，不直接贴到主音符
+          const endX = mainNoteX - size * 0.6;
+          const endY = y - size * 0.4;
+
+          // 简单的小弧线：起点 → 控制点(偏下) → 终点
+          const cpX = (startX + endX) / 2;
+          const cpY = Math.max(startY, endY) + size * 0.6;
+
+          ctx.strokeStyle = '#1a1a2e';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(startX, startY);
+          ctx.quadraticCurveTo(cpX, cpY, endX, endY);
+          ctx.stroke();
+        }
       }
 
       renderTie(ctx, startPos, endPos, y, note) {
@@ -1942,45 +2126,67 @@
         const notes = [];
         let time = 0;
         const quarterDuration = 60 / settings.bpm;
+        const GRACE_DURATION = 0.08; // 倚音固定80ms快速掠过
 
         for (const measure of measures) {
           for (let i = 0; i < measure.notes.length; i++) {
             const note = measure.notes[i];
             const duration = note.duration * quarterDuration;
 
+            if (note.type === 'grace') {
+              // 倚音：快速播放，不占独立时间，从主音偷取时值
+              const freq = this.getFrequency(note, settings.key);
+              notes.push({
+                frequency: freq,
+                startTime: time,
+                duration: GRACE_DURATION,
+                digit: note.digit,
+                octave: note.octave,
+                isGrace: true
+              });
+              // 倚音不增加 time，紧接着播放主音
+              continue;
+            }
+
             if (note.type === 'note') {
               const freq = this.getFrequency(note, settings.key);
 
               // 检查当前音符是否被前面的音符 tie 了
-              // 即：前一个音符标记了 isTie，且跟当前音符同音高
               const prevNote = (i > 0) ? measure.notes[i - 1] : null;
               const isTied = prevNote && prevNote.type === 'note' && prevNote.isTie &&
                              prevNote.digit === note.digit &&
                              prevNote.octave === note.octave;
 
+              // 检查前面有多少个连续的倚音，如果有，主音时长缩短
+              let graceCount = 0;
+              for (let j = i - 1; j >= 0 && measure.notes[j].type === 'grace'; j--) {
+                graceCount++;
+              }
+              let actualDuration = duration;
+              if (graceCount > 0) {
+                actualDuration = Math.max(duration - graceCount * GRACE_DURATION, duration * 0.5);
+              }
+
               if (isTied) {
-                // 连音的延续部分：不重新发音，延长前一个音符的时值
                 if (notes.length > 0) {
                   const lastNote = notes[notes.length - 1];
                   if (lastNote.digit === note.digit && lastNote.octave === note.octave) {
-                    lastNote.duration += duration;
+                    lastNote.duration += actualDuration;
                   } else {
-                    // 异常情况：前面没有同音高音符，创建新音符
                     notes.push({
                       frequency: freq,
                       startTime: time,
-                      duration: duration,
+                      duration: actualDuration,
                       digit: note.digit,
                       octave: note.octave
                     });
                   }
                 }
               } else {
-                // 普通音符（或连音的起始音符）
                 notes.push({
                   frequency: freq,
                   startTime: time,
-                  duration: duration,
+                  duration: actualDuration,
                   digit: note.digit,
                   octave: note.octave
                 });
