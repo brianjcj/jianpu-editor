@@ -1440,7 +1440,7 @@
         ctx.lineTo(lastRight, baseLineY);
         ctx.stroke();
 
-        // 画第二条下划线（只在有2条以上下划线的音符之间连）
+        // 画第二条下划线
         // 找到所有 underlines >= 2 的音符
         const sixteenthIndices = [];
         for (let i = 0; i < group.indices.length; i++) {
@@ -1450,22 +1450,37 @@
           }
         }
 
-        // 如果有相邻的十六分音符，连第二条线
-        if (sixteenthIndices.length >= 2) {
-          const lineY = baseLineY + lineSpacing;
-          const first16Idx = group.indices[sixteenthIndices[0]];
-          const last16Idx = group.indices[sixteenthIndices[sixteenthIndices.length - 1]];
-          const first16Pos = notePositions[first16Idx];
-          const last16Pos = notePositions[last16Idx];
+        // 相邻的十六分音符连起来，不相邻的各自单独画
+        const lineY = baseLineY + lineSpacing;
+        let i = 0;
+        while (i < sixteenthIndices.length) {
+          // 找一段连续的十六分音符
+          let j = i;
+          while (j + 1 < sixteenthIndices.length && sixteenthIndices[j + 1] === sixteenthIndices[j] + 1) {
+            j++;
+          }
 
-          // 第二条线也覆盖音符宽度的70%
-          const first16Left = first16Pos.x - size * 0.35;
-          const last16Right = last16Pos.x + size * 0.35;
+          const startIdx = group.indices[sixteenthIndices[i]];
+          const startPos = notePositions[startIdx];
 
-          ctx.beginPath();
-          ctx.moveTo(first16Left, lineY);
-          ctx.lineTo(last16Right, lineY);
-          ctx.stroke();
+          if (i === j) {
+            // 单个孤立的十六分音符，单独画一条短线
+            const lineWidth = size * 0.7;
+            ctx.beginPath();
+            ctx.moveTo(startPos.x - lineWidth / 2, lineY);
+            ctx.lineTo(startPos.x + lineWidth / 2, lineY);
+            ctx.stroke();
+          } else {
+            // 一段连续的十六分音符，连起来画
+            const endIdx = group.indices[sixteenthIndices[j]];
+            const endPos = notePositions[endIdx];
+            ctx.beginPath();
+            ctx.moveTo(startPos.x - size * 0.35, lineY);
+            ctx.lineTo(endPos.x + size * 0.35, lineY);
+            ctx.stroke();
+          }
+
+          i = j + 1;
         }
       }
 
