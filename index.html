@@ -462,12 +462,15 @@
       color: var(--text-muted);
       max-height: 160px;
       overflow-y: auto;
+      /* 确保滚动包含所有内容 */
+      box-sizing: border-box;
     }
 
     .syntax-help h4 {
       color: var(--accent);
-      margin-bottom: 6px;
+      margin: 0 0 6px 0;
       font-size: 13px;
+      line-height: 1.4;
     }
 
     .syntax-help code {
@@ -481,12 +484,23 @@
     .syntax-help table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 4px;
+      margin: 0;
+    }
+
+    .syntax-help tr {
+      line-height: 1.5;
     }
 
     .syntax-help td {
       padding: 2px 8px;
       border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    /* 确保最后一行可见 */
+    .syntax-help tr:last-child td {
+      border-bottom: none;
+      padding-bottom: 4px;
     }
 
     /* ===== Preview Panel ===== */
