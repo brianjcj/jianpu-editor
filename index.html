@@ -529,6 +529,99 @@
       display: none !important;
     }
 
+    /* 浮动虚拟键盘 */
+    .fab-keyboard {
+      position: fixed;
+      top: 100px;
+      right: 20px;
+      z-index: 100;
+      display: none;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    .fab-keyboard.visible {
+      display: flex;
+    }
+
+    .fab-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: white;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      box-shadow: var(--shadow-3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .fab-btn:active {
+      transform: scale(0.9);
+    }
+
+    .fab-keys {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      box-shadow: var(--shadow-3);
+    }
+
+    .fab-keys.open {
+      display: flex;
+    }
+
+    .fab-row {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+    }
+
+    .fab-key {
+      min-width: 36px;
+      height: 40px;
+      padding: 0 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-light);
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .fab-key:active {
+      transform: scale(0.92);
+      background: var(--primary-container);
+      color: var(--primary);
+    }
+
+    .fab-key-back {
+      color: var(--error);
+      background: #fef2f2;
+      border-color: #fecaca;
+    }
+
+    .fab-key-back:active {
+      background: var(--error);
+      color: #fff;
+    }
+
     /* ===== Preview Panel ===== */
     .preview-panel {
       flex: 1;
@@ -851,8 +944,36 @@
         </table>
       </div>
       
-      <!-- 语法提示弹窗 -->
-      <div class="syntax-modal" id="syntaxModal">
+    <!-- 浮动虚拟键盘 -->
+    <div class="fab-keyboard" id="fabKeyboard">
+      <div class="fab-keys" id="fabKeys">
+        <div class="fab-row">
+          <button class="fab-key" data-char="^" title="高音">^</button>
+          <button class="fab-key" data-char="_" title="低音">_</button>
+          <button class="fab-key" data-char="#" title="升号">#</button>
+          <button class="fab-key" data-char="b" title="降号">b</button>
+        </div>
+        <div class="fab-row">
+          <button class="fab-key" data-char="." title="附点">.</button>
+          <button class="fab-key" data-char="/" title="八分音符">/</button>
+          <button class="fab-key" data-char="=" title="十六分音符">=</button>
+          <button class="fab-key" data-char="-" title="增时线">−</button>
+        </div>
+        <div class="fab-row">
+          <button class="fab-key" data-char="~" title="连音线">~</button>
+          <button class="fab-key" data-char="|" title="小节线">|</button>
+          <button class="fab-key" data-char="||" title="终止线">||</button>
+          <button class="fab-key" data-char=" " title="空格">␣</button>
+        </div>
+        <div class="fab-row">
+          <button class="fab-key fab-key-back" data-char="BACKSPACE" title="退格">⌫</button>
+        </div>
+      </div>
+      <button class="fab-btn" id="fabToggle" title="符号键盘">⌨</button>
+    </div>
+
+    <!-- 语法提示弹窗 -->
+    <div class="syntax-modal" id="syntaxModal">
         <div class="syntax-modal-content">
           <div class="syntax-modal-header">
             <h4>标记语法速查</h4>
@@ -2047,6 +2168,64 @@
         e.preventDefault();
         window.print();
       }
+    });
+
+    // 浮动虚拟键盘
+    const fabToggle = document.getElementById('fabToggle');
+    const fabKeys = document.getElementById('fabKeys');
+    const fabKeyboard = document.getElementById('fabKeyboard');
+
+    // 阻止键盘区域触发编辑器失焦
+    fabKeyboard.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+    });
+
+    // 只在编辑器获得焦点时显示小圆球
+    editor.addEventListener('focus', () => {
+      fabKeyboard.classList.add('visible');
+    });
+    editor.addEventListener('blur', () => {
+      // 延迟检查，如果焦点不在键盘上则隐藏
+      setTimeout(() => {
+        if (!fabKeyboard.contains(document.activeElement)) {
+          fabKeyboard.classList.remove('visible');
+          fabKeys.classList.remove('open');
+        }
+      }, 150);
+    });
+
+    fabToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      fabKeys.classList.toggle('open');
+      editor.focus();
+    });
+
+    fabKeyboard.addEventListener('click', (e) => {
+      const key = e.target.closest('.fab-key');
+      if (!key) return;
+
+      e.preventDefault();
+      const char = key.dataset.char;
+
+      if (char === 'BACKSPACE') {
+        const start = editor.selectionStart;
+        const end = editor.selectionEnd;
+        if (start > 0) {
+          const text = editor.value;
+          editor.value = text.slice(0, start - 1) + text.slice(end);
+          editor.selectionStart = editor.selectionEnd = start - 1;
+        }
+      } else {
+        const start = editor.selectionStart;
+        const end = editor.selectionEnd;
+        const text = editor.value;
+        editor.value = text.slice(0, start) + char + text.slice(end);
+        editor.selectionStart = editor.selectionEnd = start + char.length;
+      }
+
+      editor.dispatchEvent(new Event('input'));
+      editor.focus();
+      fabKeys.classList.remove('open');
     });
 
     // 面板状态 - 与HTML初始状态保持一致
