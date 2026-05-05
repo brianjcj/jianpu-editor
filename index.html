@@ -2070,6 +2070,9 @@
 
     function closeSyntaxModal() {
       syntaxModal.classList.remove('active');
+      // 关闭弹窗时重置按钮状态
+      panelStates.syntax = false;
+      document.getElementById('toggleSyntax').classList.remove('active');
     }
 
     btnCloseSyntaxModal.addEventListener('click', closeSyntaxModal);
