@@ -1440,8 +1440,8 @@
         ctx.lineTo(lastRight, baseLineY);
         ctx.stroke();
 
-        // 画第二条下划线（只在有2条以上下划线的音符之间连）
-        // 找到所有 underlines >= 2 的音符
+        // 画第二条下划线（只在相邻的十六分音符之间连）
+        // 找到所有 underlines >= 2 的音符，检查是否相邻
         const sixteenthIndices = [];
         for (let i = 0; i < group.indices.length; i++) {
           const idx = group.indices[i];
@@ -1450,22 +1450,27 @@
           }
         }
 
-        // 如果有相邻的十六分音符，连第二条线
-        if (sixteenthIndices.length >= 2) {
-          const lineY = baseLineY + lineSpacing;
-          const first16Idx = group.indices[sixteenthIndices[0]];
-          const last16Idx = group.indices[sixteenthIndices[sixteenthIndices.length - 1]];
-          const first16Pos = notePositions[first16Idx];
-          const last16Pos = notePositions[last16Idx];
+        // 只在相邻的十六分音符之间连第二条线
+        const lineY = baseLineY + lineSpacing;
+        for (let i = 0; i < sixteenthIndices.length - 1; i++) {
+          const curr = sixteenthIndices[i];
+          const next = sixteenthIndices[i + 1];
+          // 必须相邻才连（中间不能隔其他音符）
+          if (next === curr + 1) {
+            const currIdx = group.indices[curr];
+            const nextIdx = group.indices[next];
+            const currPos = notePositions[currIdx];
+            const nextPos = notePositions[nextIdx];
 
-          // 第二条线也覆盖音符宽度的70%
-          const first16Left = first16Pos.x - size * 0.35;
-          const last16Right = last16Pos.x + size * 0.35;
+            // 第二条线覆盖音符宽度的70%
+            const left = currPos.x - size * 0.35;
+            const right = nextPos.x + size * 0.35;
 
-          ctx.beginPath();
-          ctx.moveTo(first16Left, lineY);
-          ctx.lineTo(last16Right, lineY);
-          ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(left, lineY);
+            ctx.lineTo(right, lineY);
+            ctx.stroke();
+          }
         }
       }
 
