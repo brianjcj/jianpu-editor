@@ -2164,14 +2164,14 @@
         const startX = startPos.x - size * 0.3;
         const endX = endPos.x + size * 0.3;
         const midX = (startX + endX) / 2;
-        const baseY = y - size * 1.4; // 在音符上方，比高音点还高
+        const baseY = y - size * 0.9; // 在音符上方，更靠近音符
 
         // 画弧线
         ctx.strokeStyle = '#1a1a2e';
         ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.moveTo(startX, baseY + 6);
-        ctx.quadraticCurveTo(midX, baseY - 8, endX, baseY + 6);
+        ctx.moveTo(startX, baseY + 4);
+        ctx.quadraticCurveTo(midX, baseY - 5, endX, baseY + 4);
         ctx.stroke();
 
         // 画数字
