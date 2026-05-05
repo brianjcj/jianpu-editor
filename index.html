@@ -1225,7 +1225,7 @@
               const group = noteGroups.find(g => g.indices.includes(i));
               this.renderNote(ctx, note, pos.x, y, group, notePositions, i);
             } else if (note.type === 'rest') {
-              this.renderRest(ctx, note, pos.x, y);
+              this.renderRest(ctx, note, pos.x, y, pos.width);
             }
           }
 
@@ -1484,7 +1484,7 @@
         }
       }
 
-      renderRest(ctx, note, x, y) {
+      renderRest(ctx, note, x, y, noteWidth) {
         const size = 20;
 
         ctx.fillStyle = '#1a1a2e';
@@ -1494,12 +1494,14 @@
 
         // 休止符用特殊符号或横线表示
         if (note.duration >= 1) {
-          // 全休止符/二分休止符 - 用横线表示
+          // 全休止符/二分休止符/增时线 - 用横线表示
           ctx.strokeStyle = '#1a1a2e';
           ctx.lineWidth = 2;
+          // 横线宽度适配音符宽度，最大不超过 size * 0.8
+          const lineWidth = Math.min(size * 0.8, (noteWidth || size) * 0.7);
           ctx.beginPath();
-          ctx.moveTo(x - 8, y);
-          ctx.lineTo(x + 8, y);
+          ctx.moveTo(x - lineWidth / 2, y);
+          ctx.lineTo(x + lineWidth / 2, y);
           ctx.stroke();
         } else {
           // 短休止符 - 用点或特殊标记
