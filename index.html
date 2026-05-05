@@ -795,7 +795,7 @@
           <tr><td><code>| - |</code></td><td>小节内独立休止符</td></tr>
           <tr><td><code>|</code></td><td>小节线</td></tr>
           <tr><td><code>||</code></td><td>终止线（双竖线）</td></tr>
-          <tr><td><code>(12)</code></td><td>连音/圆滑线</td></tr>
+          <tr><td><code>1~</code></td><td>连音线（tie，连接下一个同音高音符）</td></tr>
           <tr><td><code>1#</code></td><td>升半音</td></tr>
           <tr><td><code>1b</code></td><td>降半音</td></tr>
           <tr><td><code>1.</code></td><td>附点音符（时值×1.5）</td></tr>
@@ -1624,21 +1624,21 @@
             if (note.type === 'note') {
               const freq = this.getFrequency(note, settings.key);
 
-              // 检查是否是连音（tie）：当前音符标记了 tie，且下一个音符存在且同音高
-              const nextNote = (i < measure.notes.length - 1) ? measure.notes[i + 1] : null;
-              const isTied = note.isTie && nextNote && nextNote.type === 'note' &&
-                             note.digit === nextNote.digit &&
-                             note.octave === nextNote.octave;
+              // 检查当前音符是否被前面的音符 tie 了
+              // 即：前一个音符标记了 isTie，且跟当前音符同音高
+              const prevNote = (i > 0) ? measure.notes[i - 1] : null;
+              const isTied = prevNote && prevNote.type === 'note' && prevNote.isTie &&
+                             prevNote.digit === note.digit &&
+                             prevNote.octave === note.octave;
 
               if (isTied) {
-                // 连音：延长前面音符的时值，不重新发音
-                // 找到前面最后一个同音高的音符，延长它的 duration
+                // 连音的延续部分：不重新发音，延长前一个音符的时值
                 if (notes.length > 0) {
                   const lastNote = notes[notes.length - 1];
                   if (lastNote.digit === note.digit && lastNote.octave === note.octave) {
                     lastNote.duration += duration;
                   } else {
-                    // 如果前面不是同音高，创建新音符（异常情况）
+                    // 异常情况：前面没有同音高音符，创建新音符
                     notes.push({
                       frequency: freq,
                       startTime: time,
@@ -1649,7 +1649,7 @@
                   }
                 }
               } else {
-                // 普通音符
+                // 普通音符（或连音的起始音符）
                 notes.push({
                   frequency: freq,
                   startTime: time,
