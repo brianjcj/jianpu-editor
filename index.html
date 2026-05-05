@@ -2373,7 +2373,7 @@
         const notes = [];
         let time = 0;
         const quarterDuration = 60 / settings.bpm;
-        const GRACE_DURATION = 0.08; // 倚音固定80ms快速掠过
+        let graceOffset = 0; // 连续倚音在主音前占用的累计偏移
 
         for (const measure of measures) {
           for (let i = 0; i < measure.notes.length; i++) {
@@ -2381,17 +2381,17 @@
             const duration = note.duration * quarterDuration;
 
             if (note.type === 'grace') {
-              // 倚音：快速播放，不占独立时间，从主音偷取时值
               const freq = this.getFrequency(note, settings.key);
+              const graceDur = duration;
               notes.push({
                 frequency: freq,
-                startTime: time,
-                duration: GRACE_DURATION,
+                startTime: time + graceOffset,
+                duration: graceDur,
                 digit: note.digit,
                 octave: note.octave,
                 isGrace: true
               });
-              // 倚音不增加 time，紧接着播放主音
+              graceOffset += graceDur;
               continue;
             }
 
@@ -2404,35 +2404,31 @@
                              prevNote.digit === note.digit &&
                              prevNote.octave === note.octave;
 
-              // 检查前面有多少个连续的倚音，如果有，主音时长缩短
-              let graceCount = 0;
-              for (let j = i - 1; j >= 0 && measure.notes[j].type === 'grace'; j--) {
-                graceCount++;
-              }
+              // 倚音时值从主音中扣除
               let actualDuration = duration;
-              if (graceCount > 0) {
-                actualDuration = Math.max(duration - graceCount * GRACE_DURATION, duration * 0.5);
+              if (graceOffset > 0) {
+                actualDuration = Math.max(duration - graceOffset, duration * 0.5);
               }
 
               if (isTied) {
-                if (notes.length > 0) {
-                  const lastNote = notes[notes.length - 1];
-                  if (lastNote.digit === note.digit && lastNote.octave === note.octave) {
-                    lastNote.duration += actualDuration;
-                  } else {
-                    notes.push({
-                      frequency: freq,
-                      startTime: time,
-                      duration: actualDuration,
-                      digit: note.digit,
-                      octave: note.octave
-                    });
-                  }
+                // 找到最后一个非倚音的实际音符来延长
+                let k = notes.length - 1;
+                while (k >= 0 && notes[k].isGrace) k--;
+                if (k >= 0 && notes[k].digit === note.digit && notes[k].octave === note.octave) {
+                  notes[k].duration += actualDuration;
+                } else {
+                  notes.push({
+                    frequency: freq,
+                    startTime: time + graceOffset,
+                    duration: actualDuration,
+                    digit: note.digit,
+                    octave: note.octave
+                  });
                 }
               } else {
                 notes.push({
                   frequency: freq,
-                  startTime: time,
+                  startTime: time + graceOffset,
                   duration: actualDuration,
                   digit: note.digit,
                   octave: note.octave
@@ -2453,6 +2449,7 @@
               }
             }
             time += duration;
+            graceOffset = 0;
           }
         }
 
