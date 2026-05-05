@@ -937,6 +937,7 @@
           <tr><td><code>1.</code></td><td>附点音符（时值×1.5）</td></tr>
           <tr><td><code>1/</code></td><td>下划线（八分音符）</td></tr>
           <tr><td><code>1//</code></td><td>双下划线（十六分音符）</td></tr>
+          <tr><td><code>1///</code></td><td>三下划线（三十二分音符）</td></tr>
           <tr><td><code>1=</code></td><td>延长线下划线</td></tr>
           <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
           <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
@@ -993,6 +994,7 @@
             <tr><td><code>1.</code></td><td>附点音符（时值×1.5）</td></tr>
             <tr><td><code>1/</code></td><td>下划线（八分音符）</td></tr>
             <tr><td><code>1//</code></td><td>双下划线（十六分音符）</td></tr>
+            <tr><td><code>1///</code></td><td>三下划线（三十二分音符）</td></tr>
             <tr><td><code>1=</code></td><td>延长线下划线</td></tr>
             <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
             <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
@@ -1333,7 +1335,8 @@
 
       calculateDuration(underlines, hasDot) {
         let duration = 1;
-        if (underlines >= 2) duration = 0.25;
+        if (underlines >= 3) duration = 0.125;
+        else if (underlines >= 2) duration = 0.25;
         else if (underlines === 1) duration = 0.5;
         if (hasDot) duration *= 1.5;
         return duration;
@@ -1347,7 +1350,7 @@
         this.ctx = ctx;
         this.config = {
           noteSize: 28,
-          lineHeight: 80,
+          lineHeight: 95,
           measureGap: 40,
           noteGap: 36,
           marginX: 60,
@@ -1525,9 +1528,10 @@
           // 识别需要连线的音符组
           const noteGroups = this.groupShortNotes(measure.notes);
 
-          // 计算小节内基础单位宽度
+          // 计算小节内基础单位宽度（右侧留出间距，避免音符紧贴小节线）
           const measureWeight = measureWeights[m];
-          const unitWidth = measureWidth / Math.max(measureWeight, 1);
+          const noteAreaMargin = 12;
+          const unitWidth = (measureWidth - noteAreaMargin) / Math.max(measureWeight, 1);
 
           // 预计算每个音符的位置
           const notePositions = [];
@@ -1620,27 +1624,27 @@
           // 更新 currentX 到小节末尾
           currentX += measureWidth;
 
-          // 小节线
+          // 小节线（延长以覆盖三十二分音符下划线）
           ctx.strokeStyle = '#1a1a2e';
           ctx.lineWidth = 1.5;
           ctx.beginPath();
-          ctx.moveTo(currentX, y - 25);
-          ctx.lineTo(currentX, y + 15);
+          ctx.moveTo(currentX, y - 20);
+          ctx.lineTo(currentX, y + 23);
           ctx.stroke();
 
           // 终止双竖线
           if (measure.isDouble && isLast) {
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo(currentX + 3, y - 25);
-            ctx.lineTo(currentX + 3, y + 15);
+            ctx.moveTo(currentX + 3, y - 20);
+            ctx.lineTo(currentX + 3, y + 23);
             ctx.stroke();
 
             // 粗线
             ctx.lineWidth = 3;
             ctx.beginPath();
-            ctx.moveTo(currentX + 8, y - 25);
-            ctx.lineTo(currentX + 8, y + 15);
+            ctx.moveTo(currentX + 8, y - 20);
+            ctx.lineTo(currentX + 8, y + 23);
             ctx.stroke();
           }
         }
@@ -1907,7 +1911,7 @@
           const baseLineY = graceY + size * 0.4 + 1;
           const lineSpacing = 3;
 
-          for (let line = 0; line < 2; line++) {
+          for (let line = 0; line < 3; line++) {
             const required = line + 1;
             let segStart = -1;
             for (let idx = 0; idx <= notes.length; idx++) {
@@ -2055,6 +2059,44 @@
           }
 
           i = j + 1;
+        }
+
+        // 画第三条下划线（三十二分音符）
+        const thirtySecondIndices = [];
+        for (let k = 0; k < group.indices.length; k++) {
+          const idx = group.indices[k];
+          if (notes[idx].underlines >= 3) {
+            thirtySecondIndices.push(k);
+          }
+        }
+
+        const lineY3 = baseLineY + lineSpacing * 2;
+        let k = 0;
+        while (k < thirtySecondIndices.length) {
+          let m = k;
+          while (m + 1 < thirtySecondIndices.length && thirtySecondIndices[m + 1] === thirtySecondIndices[m] + 1) {
+            m++;
+          }
+
+          const startIdx = group.indices[thirtySecondIndices[k]];
+          const startPos = notePositions[startIdx];
+
+          if (k === m) {
+            const lineWidth = size * 0.7;
+            ctx.beginPath();
+            ctx.moveTo(startPos.x - lineWidth / 2, lineY3);
+            ctx.lineTo(startPos.x + lineWidth / 2, lineY3);
+            ctx.stroke();
+          } else {
+            const endIdx = group.indices[thirtySecondIndices[m]];
+            const endPos = notePositions[endIdx];
+            ctx.beginPath();
+            ctx.moveTo(startPos.x - size * 0.35, lineY3);
+            ctx.lineTo(endPos.x + size * 0.35, lineY3);
+            ctx.stroke();
+          }
+
+          k = m + 1;
         }
       }
 
