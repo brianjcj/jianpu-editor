@@ -1743,20 +1743,23 @@
           // 识别需要连线的音符组
           const noteGroups = this.groupShortNotes(measure.notes);
 
-          // 计算小节内基础单位宽度（右侧留出间距，避免音符紧贴小节线）
+          // 计算小节内基础单位宽度（避免音符紧贴小节线）
           const measureWeight = measureWeights[m];
           const noteAreaMargin = 12;
+          // 每行第一小节左侧不留间距（第一个音符左对齐），其他小节左右对称
+          const isFirstMeasure = m === 0;
+          const leftMargin = isFirstMeasure ? 0 : noteAreaMargin / 2;
           const unitWidth = (measureWidth - noteAreaMargin) / Math.max(measureWeight, 1);
 
           // 预计算每个音符的位置
           const notePositions = [];
-          let tempX = currentX;
+          let tempX = currentX + leftMargin;
           const firstNoteSize = 20; // 与 renderNote 中的字号一致
           for (let i = 0; i < measure.notes.length; i++) {
             const note = measure.notes[i];
             const noteWidth = unitWidth * this.getNoteWeight(note);
             let noteX = tempX + noteWidth / 2;
-            // 每行第一个音符左对齐，消除左侧留白，使各行开头对齐
+            // 每行第一个小节第一个音符左对齐，消除左侧留白，使各行开头对齐
             if (m === 0 && i === 0 && noteWidth >= firstNoteSize) {
               noteX = tempX + firstNoteSize / 2;
             }
