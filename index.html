@@ -1778,7 +1778,11 @@
             if (note.tuplet && note.tuplet.index === 0) {
               const endIdx = i + note.tuplet.count - 1;
               if (endIdx < notePositions.length) {
-                this.renderTupletBracket(ctx, pos, notePositions[endIdx], y, note.tuplet.number);
+                let maxOctave = 0;
+                for (let t = i; t <= endIdx; t++) {
+                  if (measure.notes[t].octave > maxOctave) maxOctave = measure.notes[t].octave;
+                }
+                this.renderTupletBracket(ctx, pos, notePositions[endIdx], y, note.tuplet.number, maxOctave);
               }
             }
 
@@ -1841,7 +1845,7 @@
                 note.isTie &&
                 note.digit === nextNote.digit &&
                 note.octave === nextNote.octave) {
-              this.renderTie(ctx, notePositions[i], notePositions[i + 1], y, note);
+              this.renderTie(ctx, notePositions[i], notePositions[i + 1], y, Math.max(note.octave, nextNote.octave));
             }
           }
 
@@ -1994,15 +1998,6 @@
           }
         }
 
-        // 低音点（下方）—— 基于统一基线向下画，距离加大
-        if (note.octave < 0) {
-          for (let i = 0; i < Math.abs(note.octave); i++) {
-            ctx.beginPath();
-            ctx.arc(x + xOffset, noteY + size * 0.75 + i * 10, dotRadius, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-
         // 附点
         if (note.hasDot) {
           ctx.beginPath();
@@ -2022,6 +2017,21 @@
             ctx.moveTo(x - lineWidth / 2 + xOffset, lineY + i * 5);
             ctx.lineTo(x + lineWidth / 2 + xOffset, lineY + i * 5);
             ctx.stroke();
+          }
+        }
+
+        // 低音点（下方）—— 画在最下面下划线的下面
+        if (note.octave < 0) {
+          let lowerDotBaseY;
+          if (note.underlines > 0) {
+            lowerDotBaseY = noteY + size * 0.4 + 2 + (note.underlines - 1) * 5 + 8;
+          } else {
+            lowerDotBaseY = noteY + size * 0.75;
+          }
+          for (let i = 0; i < Math.abs(note.octave); i++) {
+            ctx.beginPath();
+            ctx.arc(x + xOffset, lowerDotBaseY + i * 10, dotRadius, 0, Math.PI * 2);
+            ctx.fill();
           }
         }
       }
@@ -2060,15 +2070,6 @@
           }
         }
 
-        // 低音点
-        if (note.octave < 0) {
-          for (let i = 0; i < Math.abs(note.octave); i++) {
-            ctx.beginPath();
-            ctx.arc(graceX + xOffset, graceY + size * 0.75 + i * 7, dotRadius, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-
         // 下划线（八分/十六分音符）
         if (note.underlines > 0) {
           ctx.strokeStyle = '#1a1a2e';
@@ -2081,6 +2082,21 @@
             ctx.moveTo(graceX + xOffset - lineWidth / 2, lineY + i * 3);
             ctx.lineTo(graceX + xOffset + lineWidth / 2, lineY + i * 3);
             ctx.stroke();
+          }
+        }
+
+        // 低音点——画在最下面下划线的下面
+        if (note.octave < 0) {
+          let lowerDotBaseY;
+          if (note.underlines > 0) {
+            lowerDotBaseY = graceY + size * 0.4 + 1 + (note.underlines - 1) * 3 + 6;
+          } else {
+            lowerDotBaseY = graceY + size * 0.75;
+          }
+          for (let i = 0; i < Math.abs(note.octave); i++) {
+            ctx.beginPath();
+            ctx.arc(graceX + xOffset, lowerDotBaseY + i * 7, dotRadius, 0, Math.PI * 2);
+            ctx.fill();
           }
         }
 
@@ -2130,14 +2146,6 @@
               ctx.fill();
             }
           }
-
-          if (note.octave < 0) {
-            for (let i = 0; i < Math.abs(note.octave); i++) {
-              ctx.beginPath();
-              ctx.arc(graceX + xOffset, graceY + size * 0.75 + i * 7, dotRadius, 0, Math.PI * 2);
-              ctx.fill();
-            }
-          }
         }
 
         if (notes.some(n => n.underlines > 0)) {
@@ -2164,6 +2172,26 @@
                 ctx.stroke();
                 segStart = -1;
               }
+            }
+          }
+        }
+
+        // 低音点——画在最下面下划线的下面
+        for (let idx = 0; idx < notes.length; idx++) {
+          const note = notes[idx];
+          if (note.octave < 0) {
+            const graceX = xs[idx] - size * 0.8;
+            let xOffset = note.accidental ? size * 0.2 : 0;
+            let lowerDotBaseY;
+            if (note.underlines > 0) {
+              lowerDotBaseY = graceY + size * 0.4 + 1 + (note.underlines - 1) * 3 + 6;
+            } else {
+              lowerDotBaseY = graceY + size * 0.75;
+            }
+            for (let i = 0; i < Math.abs(note.octave); i++) {
+              ctx.beginPath();
+              ctx.arc(graceX + xOffset, lowerDotBaseY + i * 7, dotRadius, 0, Math.PI * 2);
+              ctx.fill();
             }
           }
         }
@@ -2198,17 +2226,12 @@
         }
       }
 
-      renderTie(ctx, startPos, endPos, y, note) {
+      renderTie(ctx, startPos, endPos, y, maxOctave) {
         const size = 20;
 
-        // 计算Y位置
-        let yOffset = 0;
-        if (note.octave > 0) yOffset = -10 * note.octave;
-        if (note.octave < 0) yOffset = 10 * Math.abs(note.octave);
-        const noteY = y + yOffset;
-
-        // 弧线在音符上方
-        const arcY = noteY - size * 0.6;
+        // 弧线在音符上方，根据高音点数量自适应上移
+        const offset = maxOctave > 0 ? maxOctave * 10 + 3 : 0;
+        const arcY = y - size * 0.6 - offset;
         const startX = startPos.x;
         const endX = endPos.x;
         const midX = (startX + endX) / 2;
@@ -2222,12 +2245,13 @@
         ctx.stroke();
       }
 
-      renderTupletBracket(ctx, startPos, endPos, y, number) {
+      renderTupletBracket(ctx, startPos, endPos, y, number, maxOctave = 0) {
         const size = 20;
         const startX = startPos.x - size * 0.3;
         const endX = endPos.x + size * 0.3;
         const midX = (startX + endX) / 2;
-        const baseY = y - size * 0.9; // 在音符上方，更靠近音符
+        const offset = maxOctave > 0 ? maxOctave * 10 + 3 : 0;
+        const baseY = y - size * 0.9 - offset; // 在音符上方，根据高音点自适应上移
 
         // 画弧线
         ctx.strokeStyle = '#1a1a2e';
@@ -2260,12 +2284,8 @@
         const lastPos = notePositions[lastIdx];
         const firstNote = notes[firstIdx];
 
-        // 计算Y位置（基于第一个音符）
-        let yOffset = 0;
-        if (firstNote.octave > 0) yOffset = -10 * firstNote.octave;
-        if (firstNote.octave < 0) yOffset = 10 * Math.abs(firstNote.octave);
-        const noteY = y + yOffset;
-        const baseLineY = noteY + size * 0.4 + 2;
+        // 下划线统一基线，不随高低音偏移
+        const baseLineY = y + size * 0.4 + 2;
 
         // 画第一条下划线（所有音符都连）
         // 使用音符宽度，让线覆盖音符宽度的70%
