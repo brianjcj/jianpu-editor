@@ -948,6 +948,8 @@
           <tr><td><code>1=</code></td><td>十六分音符（同 <code>1//</code>）</td></tr>
           <tr><td><code>(3)</code></td><td>倚音（括号内音符，如 <code>(3)</code> <code>(^5)</code>）</td></tr>
           <tr><td><code>X</code></td><td>节拍/鼓点（无音高，支持 X/ X// X. X~）</td></tr>
+          <tr><td><code>1弹</code></td><td>弹（下拨，符号 <code>\\</code>）</td></tr>
+          <tr><td><code>1挑</code></td><td>挑（上拨，符号 <code>/</code>）</td></tr>
           <tr><td><code>{3:1/ 2/ 3/}</code></td><td>三连音（N连音通用，如 {5:...}）</td></tr>
           <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
           <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
@@ -979,6 +981,10 @@
         <div class="fab-row">
           <button class="fab-key" data-char="{3:}" title="三连音">3⌢</button>
         </div>
+        <div class="fab-row">
+          <button class="fab-key" data-char="弹" title="弹（下拨）">弹</button>
+          <button class="fab-key" data-char="挑" title="挑（上拨）">挑</button>
+        </div>
       </div>
       <button class="fab-btn" id="fabToggle" title="符号键盘">⌨</button>
     </div>
@@ -1008,6 +1014,8 @@
             <tr><td><code>1=</code></td><td>十六分音符（同 <code>1//</code>）</td></tr>
             <tr><td><code>(3)</code></td><td>倚音（括号内音符，如 <code>(3)</code> <code>(^5)</code>）</td></tr>
             <tr><td><code>X</code></td><td>节拍/鼓点（无音高，支持 X/ X// X. X~）</td></tr>
+            <tr><td><code>1弹</code></td><td>弹（下拨，符号 <code>\\</code>）</td></tr>
+            <tr><td><code>1挑</code></td><td>挑（上拨，符号 <code>/</code>）</td></tr>
             <tr><td><code>{3:1/ 2/ 3/}</code></td><td>三连音（N连音通用，如 {5:...}）</td></tr>
             <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
             <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
@@ -1084,6 +1092,12 @@
       'A':  { '1': 440.00, '2': 493.88, '3': 554.37, '4': 587.33, '5': 659.25, '6': 739.99, '7': 830.61 },
       'A#': { '1': 466.16, '2': 523.25, '3': 587.33, '4': 622.25, '5': 698.46, '6': 783.99, '7': 880.00 },
       'B':  { '1': 493.88, '2': 554.37, '3': 622.25, '4': 659.25, '5': 739.99, '6': 830.61, '7': 932.33 },
+    };
+
+    // 演奏技法映射：名称 -> 渲染符号
+    const TECHNIQUES = {
+      '弹': '\\',
+      '挑': '/'
     };
 
     // ===== 解析器 =====
@@ -1342,6 +1356,16 @@
           else break;
         }
 
+        // 检测演奏技法（如 1弹、1挑）
+        let technique = '';
+        for (const name of Object.keys(TECHNIQUES)) {
+          if (line.slice(i, i + name.length) === name) {
+            technique = name;
+            i += name.length;
+            break;
+          }
+        }
+
         const duration = this.calculateDuration(underlines, hasDot);
 
         return {
@@ -1353,7 +1377,8 @@
             duration: duration,
             underlines: underlines,
             hasDot: hasDot,
-            isTie: isTie
+            isTie: isTie,
+            technique: technique
           },
           nextIndex: i
         };
@@ -1399,13 +1424,24 @@
             i++;
           }
 
+          // 检测演奏技法
+          let technique = '';
+          for (const name of Object.keys(TECHNIQUES)) {
+            if (line.slice(i, i + name.length) === name) {
+              technique = name;
+              i += name.length;
+              break;
+            }
+          }
+
           graceTokens.push({
             type: 'grace',
             digit: digit,
             octave: octave,
             accidental: accidental,
             underlines: underlines,
-            duration: 0.125 // 三十二分音符时值，用于播放
+            duration: 0.125, // 三十二分音符时值，用于播放
+            technique: technique
           });
         }
 
@@ -2003,6 +2039,27 @@
           }
         }
 
+        // 演奏技法符号（弹 \，挑 /）
+        if (note.technique && TECHNIQUES[note.technique]) {
+          ctx.strokeStyle = '#1a1a2e';
+          ctx.lineWidth = 1.5;
+          const techY = note.octave > 0
+            ? noteY - size * 0.75 - (note.octave - 1) * 10 - 14
+            : noteY - size * 0.65 - 10;
+          const techSize = size * 0.35;
+          if (note.technique === '弹') {
+            ctx.beginPath();
+            ctx.moveTo(x + xOffset - techSize, techY - techSize);
+            ctx.lineTo(x + xOffset + techSize, techY + techSize);
+            ctx.stroke();
+          } else if (note.technique === '挑') {
+            ctx.beginPath();
+            ctx.moveTo(x + xOffset - techSize, techY + techSize);
+            ctx.lineTo(x + xOffset + techSize, techY - techSize);
+            ctx.stroke();
+          }
+        }
+
         // 附点
         if (note.hasDot) {
           ctx.beginPath();
@@ -2072,6 +2129,27 @@
             ctx.beginPath();
             ctx.arc(graceX + xOffset, graceY - size * 0.75 - i * 7, dotRadius, 0, Math.PI * 2);
             ctx.fill();
+          }
+        }
+
+        // 演奏技法符号
+        if (note.technique && TECHNIQUES[note.technique]) {
+          ctx.strokeStyle = '#1a1a2e';
+          ctx.lineWidth = 1.2;
+          const techY = note.octave > 0
+            ? graceY - size * 0.75 - (note.octave - 1) * 7 - 10
+            : graceY - size * 0.6 - 8;
+          const techSize = size * 0.3;
+          if (note.technique === '弹') {
+            ctx.beginPath();
+            ctx.moveTo(graceX + xOffset - techSize, techY - techSize);
+            ctx.lineTo(graceX + xOffset + techSize, techY + techSize);
+            ctx.stroke();
+          } else if (note.technique === '挑') {
+            ctx.beginPath();
+            ctx.moveTo(graceX + xOffset - techSize, techY + techSize);
+            ctx.lineTo(graceX + xOffset + techSize, techY - techSize);
+            ctx.stroke();
           }
         }
 
@@ -2149,6 +2227,27 @@
               ctx.beginPath();
               ctx.arc(graceX + xOffset, graceY - size * 0.75 - i * 7, dotRadius, 0, Math.PI * 2);
               ctx.fill();
+            }
+          }
+
+          // 演奏技法符号
+          if (note.technique && TECHNIQUES[note.technique]) {
+            ctx.strokeStyle = '#1a1a2e';
+            ctx.lineWidth = 1.2;
+            const techY = note.octave > 0
+              ? graceY - size * 0.75 - (note.octave - 1) * 7 - 10
+              : graceY - size * 0.6 - 8;
+            const techSize = size * 0.3;
+            if (note.technique === '弹') {
+              ctx.beginPath();
+              ctx.moveTo(graceX + xOffset - techSize, techY - techSize);
+              ctx.lineTo(graceX + xOffset + techSize, techY + techSize);
+              ctx.stroke();
+            } else if (note.technique === '挑') {
+              ctx.beginPath();
+              ctx.moveTo(graceX + xOffset - techSize, techY + techSize);
+              ctx.lineTo(graceX + xOffset + techSize, techY - techSize);
+              ctx.stroke();
             }
           }
         }
