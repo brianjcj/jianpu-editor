@@ -1792,27 +1792,28 @@
           // 更新 currentX 到小节末尾
           currentX += measureWidth;
 
-          // 小节线（延长以覆盖三十二分音符下划线）
-          ctx.strokeStyle = '#1a1a2e';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(currentX, y - 20);
-          ctx.lineTo(currentX, y + 23);
-          ctx.stroke();
-
-          // 终止双竖线
+          // 终止双竖线（两条竖线：细线+粗线）
           if (measure.isDouble && isLast) {
+            ctx.strokeStyle = '#1a1a2e';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo(currentX + 3, y - 20);
-            ctx.lineTo(currentX + 3, y + 23);
+            ctx.moveTo(currentX, y - 20);
+            ctx.lineTo(currentX, y + 23);
             ctx.stroke();
 
             // 粗线
             ctx.lineWidth = 3;
             ctx.beginPath();
-            ctx.moveTo(currentX + 8, y - 20);
-            ctx.lineTo(currentX + 8, y + 23);
+            ctx.moveTo(currentX + 5, y - 20);
+            ctx.lineTo(currentX + 5, y + 23);
+            ctx.stroke();
+          } else {
+            // 普通小节线（延长以覆盖三十二分音符下划线）
+            ctx.strokeStyle = '#1a1a2e';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(currentX, y - 20);
+            ctx.lineTo(currentX, y + 23);
             ctx.stroke();
           }
         }
