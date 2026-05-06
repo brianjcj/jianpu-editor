@@ -950,6 +950,7 @@
           <tr><td><code>X</code></td><td>节拍/鼓点（无音高，支持 X/ X// X. X~）</td></tr>
           <tr><td><code>1弹</code></td><td>弹（下拨，符号 <code>\\</code>）</td></tr>
           <tr><td><code>1挑</code></td><td>挑（上拨，符号 <code>/</code>）</td></tr>
+          <tr><td><code>3滑5</code></td><td>滑音（从 3 滑到 5，起始音在目标音上方）</td></tr>
           <tr><td><code>{3:1/ 2/ 3/}</code></td><td>三连音（N连音通用，如 {5:...}）</td></tr>
           <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
           <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
@@ -984,6 +985,7 @@
         <div class="fab-row">
           <button class="fab-key" data-char="弹" title="弹（下拨）">弹</button>
           <button class="fab-key" data-char="挑" title="挑（上拨）">挑</button>
+          <button class="fab-key" data-char="滑" title="滑音">滑</button>
         </div>
       </div>
       <button class="fab-btn" id="fabToggle" title="符号键盘">⌨</button>
@@ -1016,6 +1018,7 @@
             <tr><td><code>X</code></td><td>节拍/鼓点（无音高，支持 X/ X// X. X~）</td></tr>
             <tr><td><code>1弹</code></td><td>弹（下拨，符号 <code>\\</code>）</td></tr>
             <tr><td><code>1挑</code></td><td>挑（上拨，符号 <code>/</code>）</td></tr>
+            <tr><td><code>3滑5</code></td><td>滑音（从 3 滑到 5，起始音在目标音上方）</td></tr>
             <tr><td><code>{3:1/ 2/ 3/}</code></td><td>三连音（N连音通用，如 {5:...}）</td></tr>
             <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
             <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
@@ -1210,6 +1213,20 @@
           // 音符（包括带 ^ 高音前缀和 _ 低音前缀的）
           if (/[1-7]/.test(ch) || ch === '^' || ch === '_') {
             const note = this.parseNote(line, i);
+            // 检测滑音：起始音 + 滑 + 目标音
+            if (note.token.type === 'note' && line.slice(note.nextIndex, note.nextIndex + 1) === '滑') {
+              const target = this.parseNote(line, note.nextIndex + 1);
+              if (target.token.type === 'note') {
+                target.token.slideFrom = {
+                  digit: note.token.digit,
+                  octave: note.token.octave,
+                  accidental: note.token.accidental
+                };
+                tokens.push(target.token);
+                i = target.nextIndex;
+                continue;
+              }
+            }
             tokens.push(note.token);
             i = note.nextIndex;
             continue;
@@ -2096,6 +2113,71 @@
             ctx.fill();
           }
         }
+
+        // 滑音：起始音小字在目标音偏左上方，下划线延长带箭头
+        if (note.slideFrom) {
+          const slideSize = 13;
+          const slideDigit = note.slideFrom.digit;
+          const slideOctave = note.slideFrom.octave || 0;
+          const slideAccidental = note.slideFrom.accidental || '';
+
+          // 起始音在目标音偏左上方
+          const slideX = x + xOffset - 6;
+          const slideY = noteY - 20;
+
+          ctx.fillStyle = '#1a1a2e';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          // 起始音升降号
+          let slideOffset = 0;
+          if (slideAccidental) {
+            ctx.font = `${slideSize * 0.7}px "Segoe UI", sans-serif`;
+            ctx.fillText(slideAccidental === '#' ? '♯' : '♭', slideX - slideSize * 0.5, slideY);
+            slideOffset = slideSize * 0.2;
+          }
+
+          // 起始音数字
+          ctx.font = `bold ${slideSize}px "Segoe UI", "PingFang SC", sans-serif`;
+          ctx.fillText(slideDigit, slideX + slideOffset, slideY);
+
+          // 起始音高音点
+          if (slideOctave > 0) {
+            for (let i = 0; i < slideOctave; i++) {
+              ctx.beginPath();
+              ctx.arc(slideX + slideOffset, slideY - slideSize * 0.75 - i * 7, 1.8, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+
+          // 起始音低音点
+          if (slideOctave < 0) {
+            for (let i = 0; i < Math.abs(slideOctave); i++) {
+              ctx.beginPath();
+              ctx.arc(slideX + slideOffset, slideY + slideSize * 0.75 + i * 7, 1.8, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+
+          // 箭头线：尾部固定，向右延伸到目标音右边界
+          ctx.strokeStyle = '#1a1a2e';
+          ctx.lineWidth = 1.2;
+          const lineY = slideY + slideSize * 0.5 + 2;
+          const tailX = x + xOffset - 10;
+          const headX = x + xOffset + size * 0.4;
+
+          ctx.beginPath();
+          ctx.moveTo(tailX, lineY);
+          ctx.lineTo(headX, lineY);
+          ctx.stroke();
+
+          // 箭头头（只有上半部分）
+          const headLen = 5;
+          ctx.beginPath();
+          ctx.moveTo(headX, lineY);
+          ctx.lineTo(headX - headLen, lineY - headLen * 0.6);
+          ctx.stroke();
+        }
       }
 
       renderGraceNote(ctx, note, x, y, mainNoteX) {
@@ -2598,24 +2680,36 @@
                 if (k >= 0 && notes[k].digit === note.digit && notes[k].octave === note.octave) {
                   notes[k].duration += actualDuration;
                 } else {
-                  notes.push({
+                  const noteData = {
                     frequency: freq,
                     startTime: time + graceOffset,
                     duration: actualDuration,
                     digit: note.digit,
                     octave: note.octave,
                     isBeat: note.type === 'beat'
-                  });
+                  };
+                  if (note.slideFrom) {
+                    noteData.slideFrom = {
+                      frequency: this.getFrequency(note.slideFrom, settings.key)
+                    };
+                  }
+                  notes.push(noteData);
                 }
               } else {
-                notes.push({
+                const noteData = {
                   frequency: freq,
                   startTime: time + graceOffset,
                   duration: actualDuration,
                   digit: note.digit,
                   octave: note.octave,
                   isBeat: note.type === 'beat'
-                });
+                };
+                if (note.slideFrom) {
+                  noteData.slideFrom = {
+                    frequency: this.getFrequency(note.slideFrom, settings.key)
+                  };
+                }
+                notes.push(noteData);
               }
             } else if (note.type === 'rest') {
               // 增时线：延长前一个实际音符或节拍符的时值
@@ -2714,7 +2808,13 @@
             osc.stop(startTime + 0.1);
           } else {
             osc.type = 'sine';
-            osc.frequency.value = note.frequency;
+            if (note.slideFrom && note.slideFrom.frequency > 0) {
+              const halfDur = note.duration / 2;
+              osc.frequency.setValueAtTime(note.slideFrom.frequency, startTime);
+              osc.frequency.linearRampToValueAtTime(note.frequency, startTime + halfDur);
+            } else {
+              osc.frequency.setValueAtTime(note.frequency, startTime);
+            }
 
             // ADSR 包络 + 自然结束淡出
             gain.gain.setValueAtTime(0, startTime);
