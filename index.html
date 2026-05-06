@@ -2692,6 +2692,8 @@
                     noteData.slideFrom = {
                       frequency: this.getFrequency(note.slideFrom, settings.key)
                     };
+                    const sixteenthDur = 0.25 * quarterDuration;
+                    noteData.slideDuration = Math.min(sixteenthDur, actualDuration * 0.5);
                   }
                   notes.push(noteData);
                 }
@@ -2708,6 +2710,8 @@
                   noteData.slideFrom = {
                     frequency: this.getFrequency(note.slideFrom, settings.key)
                   };
+                  const sixteenthDur = 0.25 * quarterDuration;
+                  noteData.slideDuration = Math.min(sixteenthDur, actualDuration * 0.5);
                 }
                 notes.push(noteData);
               }
@@ -2809,9 +2813,9 @@
           } else {
             osc.type = 'sine';
             if (note.slideFrom && note.slideFrom.frequency > 0) {
-              const halfDur = note.duration / 2;
+              const slideDur = note.slideDuration || (note.duration * 0.5);
               osc.frequency.setValueAtTime(note.slideFrom.frequency, startTime);
-              osc.frequency.linearRampToValueAtTime(note.frequency, startTime + halfDur);
+              osc.frequency.linearRampToValueAtTime(note.frequency, startTime + slideDur);
             } else {
               osc.frequency.setValueAtTime(note.frequency, startTime);
             }
