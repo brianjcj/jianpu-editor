@@ -1687,7 +1687,7 @@
         ctx.textAlign = 'left';
         const keyText = `${settings.key}大调  ${settings.timeSignature[0]}/${settings.timeSignature[1]}拍  ♩=${settings.bpm}`;
         ctx.fillText(keyText, MARGIN_X, y);
-        y += 25;
+        y += lineHeight * 0.75;
 
         // 渲染每行
         // 先计算前面行的平均小节宽度，作为最后一行的限制
