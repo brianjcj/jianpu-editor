@@ -946,6 +946,7 @@
           <tr><td><code>1//</code></td><td>双下划线（十六分音符）</td></tr>
           <tr><td><code>1///</code></td><td>三下划线（三十二分音符）</td></tr>
           <tr><td><code>1=</code></td><td>十六分音符（同 <code>1//</code>）</td></tr>
+          <tr><td><code>X</code></td><td>节拍/鼓点（无音高，支持 X/ X// X. X~）</td></tr>
           <tr><td><code>{3:1/ 2/ 3/}</code></td><td>三连音（N连音通用，如 {5:...}）</td></tr>
           <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
           <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
@@ -1004,6 +1005,7 @@
             <tr><td><code>1//</code></td><td>双下划线（十六分音符）</td></tr>
             <tr><td><code>1///</code></td><td>三下划线（三十二分音符）</td></tr>
             <tr><td><code>1=</code></td><td>十六分音符（同 <code>1//</code>）</td></tr>
+            <tr><td><code>X</code></td><td>节拍/鼓点（无音高，支持 X/ X// X. X~）</td></tr>
             <tr><td><code>{3:1/ 2/ 3/}</code></td><td>三连音（N连音通用，如 {5:...}）</td></tr>
             <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
             <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
@@ -1130,7 +1132,7 @@
                 measures.push({ notes: currentMeasure, isDouble: token.isDouble });
                 currentMeasure = [];
               }
-            } else if (token.type === 'note' || token.type === 'rest' || token.type === 'grace') {
+            } else if (token.type === 'note' || token.type === 'rest' || token.type === 'grace' || token.type === 'beat') {
               currentMeasure.push(token);
             }
           }
@@ -1215,6 +1217,33 @@
               duration: duration,
               underlines: underlines,
               hasDot: hasDot
+            });
+            i = i2;
+            continue;
+          }
+
+          // 节拍/鼓点 X（无音高，纯节奏）
+          if (ch === 'X' || ch === 'x') {
+            let hasDot = false;
+            let underlines = 0;
+            let isTie = false;
+            let i2 = i + 1;
+            while (i2 < line.length) {
+              const c2 = line[i2];
+              if (c2 === '.') { hasDot = true; i2++; }
+              else if (c2 === '/') { underlines++; i2++; }
+              else if (c2 === '=') { underlines += 2; i2++; }
+              else if (c2 === '~') { isTie = true; i2++; }
+              else break;
+            }
+            const duration = this.calculateDuration(underlines, hasDot);
+            tokens.push({
+              type: 'beat',
+              digit: 'X',
+              duration: duration,
+              underlines: underlines,
+              hasDot: hasDot,
+              isTie: isTie
             });
             i = i2;
             continue;
@@ -1449,6 +1478,32 @@
             continue;
           }
 
+          // 节拍/鼓点 X
+          if (ch === 'X' || ch === 'x') {
+            let hasDot = false;
+            let underlines = 0;
+            let isTie = false;
+            let i2 = i + 1;
+            while (i2 < line.length && line[i2] !== '}') {
+              const c2 = line[i2];
+              if (c2 === '.') { hasDot = true; i2++; }
+              else if (c2 === '/') { underlines++; i2++; }
+              else if (c2 === '=') { underlines += 2; i2++; }
+              else if (c2 === '~') { isTie = true; i2++; }
+              else break;
+            }
+            tokens.push({
+              type: 'beat',
+              digit: 'X',
+              duration: this.calculateDuration(underlines, hasDot),
+              underlines: underlines,
+              hasDot: hasDot,
+              isTie: isTie
+            });
+            i = i2;
+            continue;
+          }
+
           // 遇到无法解析的字符，终止解析
           break;
         }
@@ -1462,7 +1517,7 @@
         // 计算标准总时值
         let standardTotal = 0;
         for (const t of tokens) {
-          if (t.type === 'note' || t.type === 'rest') {
+          if (t.type === 'note' || t.type === 'rest' || t.type === 'beat') {
             standardTotal += t.duration;
           }
         }
@@ -1476,7 +1531,7 @@
         const groupId = 'tuplet_' + tupletNumber + '_' + Date.now() + '_' + Math.random().toString(36).slice(2);
         for (let idx = 0; idx < tokens.length; idx++) {
           const t = tokens[idx];
-          if (t.type === 'note' || t.type === 'rest') {
+          if (t.type === 'note' || t.type === 'rest' || t.type === 'beat') {
             t.duration *= ratio;
             t.tuplet = {
               number: tupletNumber,
@@ -1727,7 +1782,7 @@
               }
             }
 
-            if (note.type === 'note') {
+            if (note.type === 'note' || note.type === 'beat') {
               const group = noteGroups.find(g => g.indices.includes(i));
               this.renderNote(ctx, note, pos.x, y, group, notePositions, i);
               // 如果前面有倚音，在这里渲染所有连续倚音（依附于当前主音）
@@ -1781,7 +1836,8 @@
           for (let i = 0; i < measure.notes.length - 1; i++) {
             const note = measure.notes[i];
             const nextNote = measure.notes[i + 1];
-            if (note.type === 'note' && nextNote.type === 'note' &&
+            if ((note.type === 'note' || note.type === 'beat') &&
+                (nextNote.type === 'note' || nextNote.type === 'beat') &&
                 note.isTie &&
                 note.digit === nextNote.digit &&
                 note.octave === nextNote.octave) {
@@ -1840,7 +1896,7 @@
 
         for (let i = 0; i < notes.length; i++) {
           const note = notes[i];
-          if (note.type === 'note' && note.underlines > 0) {
+          if ((note.type === 'note' || note.type === 'beat') && note.underlines > 0) {
             // 检查是否可以加入当前组
             let canJoin = currentGroup && this.isCompatible(currentGroup, note);
             // 连音组内的音符不受1拍限制，保证整组下划线连续
@@ -2396,12 +2452,12 @@
               continue;
             }
 
-            if (note.type === 'note') {
-              const freq = this.getFrequency(note, settings.key);
+            if (note.type === 'note' || note.type === 'beat') {
+              const freq = note.type === 'beat' ? 0 : this.getFrequency(note, settings.key);
 
               // 检查当前音符是否被前面的音符 tie 了
               const prevNote = (i > 0) ? measure.notes[i - 1] : null;
-              const isTied = prevNote && prevNote.type === 'note' && prevNote.isTie &&
+              const isTied = prevNote && (prevNote.type === 'note' || prevNote.type === 'beat') && prevNote.isTie &&
                              prevNote.digit === note.digit &&
                              prevNote.octave === note.octave;
 
@@ -2423,7 +2479,8 @@
                     startTime: time + graceOffset,
                     duration: actualDuration,
                     digit: note.digit,
-                    octave: note.octave
+                    octave: note.octave,
+                    isBeat: note.type === 'beat'
                   });
                 }
               } else {
@@ -2432,15 +2489,16 @@
                   startTime: time + graceOffset,
                   duration: actualDuration,
                   digit: note.digit,
-                  octave: note.octave
+                  octave: note.octave,
+                  isBeat: note.type === 'beat'
                 });
               }
             } else if (note.type === 'rest') {
-              // 增时线：延长前一个实际音符的时值
+              // 增时线：延长前一个实际音符或节拍符的时值
               if (note.isExtension) {
                 let j = i - 1;
                 while (j >= 0 && measure.notes[j].type === 'grace') j--;
-                if (j >= 0 && measure.notes[j].type === 'note') {
+                if (j >= 0 && (measure.notes[j].type === 'note' || measure.notes[j].type === 'beat')) {
                   let k = notes.length - 1;
                   while (k >= 0 && notes[k].isGrace) k--;
                   if (k >= 0) {
@@ -2510,7 +2568,7 @@
         document.getElementById('playbackBar').style.display = 'block';
 
         for (const note of notes) {
-          if (note.frequency <= 0) continue;
+          if (note.frequency <= 0 && !note.isBeat) continue;
 
           const osc = this.audioCtx.createOscillator();
           const gain = this.audioCtx.createGain();
@@ -2518,21 +2576,32 @@
           osc.connect(gain);
           gain.connect(this.audioCtx.destination);
 
-          osc.type = 'sine';
-          osc.frequency.value = note.frequency;
-
           const startTime = now + note.startTime;
           const endTime = startTime + note.duration;
 
-          // ADSR 包络 + 自然结束淡出
-          gain.gain.setValueAtTime(0, startTime);
-          gain.gain.linearRampToValueAtTime(0.3, startTime + 0.02); // Attack
-          gain.gain.setValueAtTime(0.3, endTime - 0.05); // Sustain
-          gain.gain.exponentialRampToValueAtTime(0.001, endTime); // Release
+          if (note.isBeat) {
+            // 鼓点：用三角波模拟打击乐，短促有力
+            osc.type = 'triangle';
+            osc.frequency.value = 120;
+            gain.gain.setValueAtTime(0, startTime);
+            gain.gain.linearRampToValueAtTime(0.5, startTime + 0.005); // 极快 Attack
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.08); // 快速衰减
+            osc.start(startTime);
+            osc.stop(startTime + 0.1);
+          } else {
+            osc.type = 'sine';
+            osc.frequency.value = note.frequency;
 
-          osc.start(startTime);
-          // 让增益节点控制结束，振荡器多留一点尾巴
-          osc.stop(endTime + 0.02);
+            // ADSR 包络 + 自然结束淡出
+            gain.gain.setValueAtTime(0, startTime);
+            gain.gain.linearRampToValueAtTime(0.3, startTime + 0.02); // Attack
+            gain.gain.setValueAtTime(0.3, endTime - 0.05); // Sustain
+            gain.gain.exponentialRampToValueAtTime(0.001, endTime); // Release
+
+            osc.start(startTime);
+            // 让增益节点控制结束，振荡器多留一点尾巴
+            osc.stop(endTime + 0.02);
+          }
 
           this.currentSources.push({ osc, gain });
         }
