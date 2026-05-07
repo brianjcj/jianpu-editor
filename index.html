@@ -1411,13 +1411,24 @@
               if (line[i2] === '=') underlines += 2;
               i2++;
             }
+            // 检测标注 "..."
+            let noteLabel = '';
+            if (i2 < line.length && line[i2] === '"') {
+              i2++;
+              const end = line.indexOf('"', i2);
+              if (end !== -1) {
+                noteLabel = line.slice(i2, end);
+                i2 = end + 1;
+              }
+            }
             const duration = this.calculateDuration(underlines, hasDot);
             tokens.push({
               type: 'rest',
               digit: '0',
               duration: duration,
               underlines: underlines,
-              hasDot: hasDot
+              hasDot: hasDot,
+              note: noteLabel
             });
             i = i2;
             continue;
@@ -1437,6 +1448,21 @@
               else if (c2 === '~') { isTie = true; i2++; }
               else break;
             }
+            // 检测标注 "..."
+            let noteLabel = '';
+            if (i2 < line.length && line[i2] === '"') {
+              i2++;
+              const end = line.indexOf('"', i2);
+              if (end !== -1) {
+                noteLabel = line.slice(i2, end);
+                i2 = end + 1;
+              }
+            }
+            // 标注后仍可跟 ~ 连音
+            if (i2 < line.length && line[i2] === '~') {
+              isTie = true;
+              i2++;
+            }
             const duration = this.calculateDuration(underlines, hasDot);
             tokens.push({
               type: 'beat',
@@ -1444,7 +1470,8 @@
               duration: duration,
               underlines: underlines,
               hasDot: hasDot,
-              isTie: isTie
+              isTie: isTie,
+              note: noteLabel
             });
             i = i2;
             continue;
@@ -1464,6 +1491,17 @@
               i2++;
             }
 
+            // 检测标注 "..."
+            let noteLabel = '';
+            if (i2 < line.length && line[i2] === '"') {
+              i2++;
+              const end = line.indexOf('"', i2);
+              if (end !== -1) {
+                noteLabel = line.slice(i2, end);
+                i2 = end + 1;
+              }
+            }
+
             // 计算时值
             duration = this.calculateDuration(underlines, hasDot);
 
@@ -1473,7 +1511,8 @@
               duration: duration,
               underlines: underlines,
               hasDot: hasDot,
-              isExtension: true
+              isExtension: true,
+              note: noteLabel
             });
             i = i2;
             continue;
@@ -1547,13 +1586,24 @@
             else if (ch === '=') { underlines += 2; i++; }
             else break;
           }
+          // 检测标注 "..."
+          let noteLabel = '';
+          if (i < line.length && line[i] === '"') {
+            i++;
+            const end = line.indexOf('"', i);
+            if (end !== -1) {
+              noteLabel = line.slice(i, end);
+              i = end + 1;
+            }
+          }
           return {
             token: {
               type: 'rest',
               digit: '0',
               duration: this.calculateDuration(underlines, hasDot),
               underlines: underlines,
-              hasDot: hasDot
+              hasDot: hasDot,
+              note: noteLabel
             },
             nextIndex: i
           };
@@ -1583,6 +1633,23 @@
           }
         }
 
+        // 检测标注 "..."
+        let noteLabel = '';
+        if (i < line.length && line[i] === '"') {
+          i++;
+          const end = line.indexOf('"', i);
+          if (end !== -1) {
+            noteLabel = line.slice(i, end);
+            i = end + 1;
+          }
+        }
+
+        // 标注后仍可跟 ~ 连音
+        if (i < line.length && line[i] === '~') {
+          isTie = true;
+          i++;
+        }
+
         const duration = this.calculateDuration(underlines, hasDot);
 
         return {
@@ -1595,7 +1662,8 @@
             underlines: underlines,
             hasDot: hasDot,
             isTie: isTie,
-            technique: technique
+            technique: technique,
+            note: noteLabel
           },
           nextIndex: i
         };
@@ -1853,10 +1921,21 @@
         const beatsPerLine = 16;
         const lines = this.layoutMeasures(measures, beatsPerLine);
 
+        // 检测每行是否有标注
+        const lineHasLabel = lines.map(lineMeasures =>
+          lineMeasures.some(measure =>
+            measure.notes.some(note => note.note)
+          )
+        );
+
         // 计算总高度
         const lineHeight = 67;
+        const labelExtraHeight = 18;
         const titleHeight = settings.title ? 40 : 0;
-        const totalHeight = MARGIN_Y * 2 + titleHeight + lines.length * lineHeight + 20;
+        let totalHeight = MARGIN_Y * 2 + titleHeight + 20;
+        for (let i = 0; i < lines.length; i++) {
+          totalHeight += lineHeight + (lineHasLabel[i] ? labelExtraHeight : 0);
+        }
 
         // 设置 canvas 尺寸 - 使用 A4 比例
         const scale = 1.5; // 高清渲染
@@ -1913,7 +1992,7 @@
             ? avgMeasureWidth * 1.2  // 允许稍微宽一点，但不铺满
             : null;
           this.renderLine(ctx, line, MARGIN_X, y, A4_WIDTH - MARGIN_X * 2, useMaxWidth);
-          y += lineHeight;
+          y += lineHeight + (lineHasLabel[i] ? labelExtraHeight : 0);
         }
 
         // 存储设置供播放使用
@@ -2406,6 +2485,29 @@
           ctx.lineTo(headX - headLen, lineY - headLen * 0.6);
           ctx.stroke();
         }
+
+        // 标注
+        if (note.note) {
+          const labelSize = 11;
+          let labelY = y + size * 0.5 + 3;
+          if (note.underlines > 0) {
+            labelY = Math.max(labelY, y + size * 0.4 + 2 + (note.underlines - 1) * 5 + 5);
+          }
+          if (note.octave < 0) {
+            const dotBase = note.underlines > 0
+              ? y + size * 0.4 + 2 + (note.underlines - 1) * 5 + 8
+              : y + size * 0.75;
+            labelY = Math.max(labelY, dotBase + (Math.abs(note.octave) - 1) * 10 + 8);
+          }
+          if (note.isTie) {
+            labelY = Math.max(labelY, y + size * 0.5 + 5 + 5);
+          }
+          ctx.fillStyle = '#64748b';
+          ctx.font = `${labelSize}px "Segoe UI", "PingFang SC", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillText(note.note, x + xOffset, labelY);
+        }
       }
 
       renderGraceNote(ctx, note, x, y, mainNoteX) {
@@ -2835,6 +2937,20 @@
             ctx.lineTo(x + lineWidth / 2, lineY + i * 5);
             ctx.stroke();
           }
+        }
+
+        // 标注
+        if (note.note) {
+          const labelSize = 11;
+          let labelY = y + size * 0.5 + 3;
+          if (note.underlines > 0) {
+            labelY = Math.max(labelY, y + size * 0.4 + 2 + (note.underlines - 1) * 5 + 5);
+          }
+          ctx.fillStyle = '#64748b';
+          ctx.font = `${labelSize}px "Segoe UI", "PingFang SC", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillText(note.note, x, labelY);
         }
       }
 
