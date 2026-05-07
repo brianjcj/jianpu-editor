@@ -922,7 +922,7 @@
 
 试试输入示例：
 |: 1 2 3 4 | 5 6 5 3 :| [1 2 - - |] [2 3 - - ||]
-^1 ^2 ^3 | ^5 ^6 ^5 | ^3 ^2 ^1 ||
+1^ 2^ 3^ | 5^ 6^ 5^ | 3^ 2^ 1^ ||
 
 反复标记：|:  :|  [1 ]  [2 ]  DC  DS  Fine
 点击右侧「示例」按钮加载完整demo"></textarea>
@@ -933,8 +933,8 @@
         </div>
         <table>
           <tr><td><code>0-7</code></td><td>中音 do re mi fa sol la si（0为休止符）</td></tr>
-          <tr><td><code>^1-^7</code></td><td>高音（上方加点）</td></tr>
-          <tr><td><code>_1-_7</code></td><td>低音（下方加点）</td></tr>
+          <tr><td><code>1^-7^</code></td><td>高音（上方加点）</td></tr>
+          <tr><td><code>1_-7_</code></td><td>低音（下方加点）</td></tr>
           <tr><td><code>-</code></td><td>增时线（延长前一音符时值）</td></tr>
           <tr><td><code>0</code></td><td>休止符</td></tr>
           <tr><td><code>|</code></td><td>小节线</td></tr>
@@ -947,7 +947,7 @@
           <tr><td><code>1//</code></td><td>双下划线（十六分音符）</td></tr>
           <tr><td><code>1///</code></td><td>三下划线（三十二分音符）</td></tr>
           <tr><td><code>1=</code></td><td>十六分音符（同 <code>1//</code>）</td></tr>
-          <tr><td><code>(3)</code></td><td>倚音（括号内音符，如 <code>(3)</code> <code>(^5)</code>）</td></tr>
+          <tr><td><code>(3)</code></td><td>倚音（括号内音符，如 <code>(3)</code> <code>(5^)</code>）</td></tr>
           <tr><td><code>X</code></td><td>节拍/鼓点（无音高，支持 X/ X// X. X~）</td></tr>
           <tr><td><code>1弹</code></td><td>弹（下拨，符号 <code>\\</code>）</td></tr>
           <tr><td><code>1挑</code></td><td>挑（上拨，符号 <code>/</code>）</td></tr>
@@ -1012,8 +1012,8 @@
           </div>
           <table>
             <tr><td><code>0-7</code></td><td>中音 do re mi fa sol la si（0为休止符）</td></tr>
-            <tr><td><code>^1-^7</code></td><td>高音（上方加点）</td></tr>
-            <tr><td><code>_1-_7</code></td><td>低音（下方加点）</td></tr>
+            <tr><td><code>1^-7^</code></td><td>高音（上方加点）</td></tr>
+            <tr><td><code>1_-7_</code></td><td>低音（下方加点）</td></tr>
             <tr><td><code>-</code></td><td>增时线（延长前一音符时值）</td></tr>
             <tr><td><code>0</code></td><td>休止符</td></tr>
             <tr><td><code>|</code></td><td>小节线</td></tr>
@@ -1026,7 +1026,7 @@
             <tr><td><code>1//</code></td><td>双下划线（十六分音符）</td></tr>
             <tr><td><code>1///</code></td><td>三下划线（三十二分音符）</td></tr>
             <tr><td><code>1=</code></td><td>十六分音符（同 <code>1//</code>）</td></tr>
-            <tr><td><code>(3)</code></td><td>倚音（括号内音符，如 <code>(3)</code> <code>(^5)</code>）</td></tr>
+            <tr><td><code>(3)</code></td><td>倚音（括号内音符，如 <code>(3)</code> <code>(5^)</code>）</td></tr>
             <tr><td><code>X</code></td><td>节拍/鼓点（无音高，支持 X/ X// X. X~）</td></tr>
             <tr><td><code>1弹</code></td><td>弹（下拨，符号 <code>\\</code>）</td></tr>
             <tr><td><code>1挑</code></td><td>挑（上拨，符号 <code>/</code>）</td></tr>
@@ -1342,7 +1342,7 @@
             continue;
           }
 
-          // 倚音：括号内的音符，如 (3) 或 (^5)
+          // 倚音：括号内的音符，如 (3) 或 (5^)
           if (ch === '(') {
             const grace = this.parseGraceNote(line, i);
             if (grace) {
@@ -1378,8 +1378,8 @@
             continue;
           }
 
-          // 音符（包括带 ^ 高音前缀和 _ 低音前缀的）
-          if (/[1-7]/.test(ch) || ch === '^' || ch === '_') {
+          // 音符（0-7）
+          if (/[0-7]/.test(ch)) {
             const note = this.parseNote(line, i);
             // 检测滑音：起始音 + 滑 + 目标音
             if (note.token.type === 'note' && line.slice(note.nextIndex, note.nextIndex + 1) === '滑') {
@@ -1397,40 +1397,6 @@
             }
             tokens.push(note.token);
             i = note.nextIndex;
-            continue;
-          }
-
-          // 休止符 0
-          if (ch === '0') {
-            let hasDot = false;
-            let underlines = 0;
-            let i2 = i + 1;
-            while (i2 < line.length && (line[i2] === '.' || line[i2] === '/' || line[i2] === '=')) {
-              if (line[i2] === '.') hasDot = true;
-              if (line[i2] === '/') underlines++;
-              if (line[i2] === '=') underlines += 2;
-              i2++;
-            }
-            // 检测标注 "..."
-            let noteLabel = '';
-            if (i2 < line.length && line[i2] === '"') {
-              i2++;
-              const end = line.indexOf('"', i2);
-              if (end !== -1) {
-                noteLabel = line.slice(i2, end);
-                i2 = end + 1;
-              }
-            }
-            const duration = this.calculateDuration(underlines, hasDot);
-            tokens.push({
-              type: 'rest',
-              digit: '0',
-              duration: duration,
-              underlines: underlines,
-              hasDot: hasDot,
-              note: noteLabel
-            });
-            i = i2;
             continue;
           }
 
@@ -1550,6 +1516,12 @@
           }
           if (matchedFlow) continue;
 
+          // 跳过孤立的 ^ _（旧前缀写法被忽略）
+          if (ch === '^' || ch === '_') {
+            i++;
+            continue;
+          }
+
           i++;
         }
 
@@ -1563,13 +1535,6 @@
         let hasDot = false;
         let underlines = 0;
         let isTie = false;
-
-        // 前缀：^ 高音, _ 低音
-        while (i < line.length && (line[i] === '^' || line[i] === '_')) {
-          if (line[i] === '^') octave++;
-          if (line[i] === '_') octave--;
-          i++;
-        }
 
         // 数字
         const digit = line[i];
@@ -1611,11 +1576,13 @@
 
         i++;
 
-        // 后缀
+        // 后缀（顺序：#b → ^_ → 演奏技法 → ./=）
         while (i < line.length) {
           const ch = line[i];
           if (ch === '#') { accidental = '#'; i++; }
           else if (ch === 'b') { accidental = 'b'; i++; }
+          else if (ch === '^') { octave++; i++; }
+          else if (ch === '_') { octave--; i++; }
           else if (ch === '.') { hasDot = true; i++; }
           else if (ch === '/') { underlines++; i++; }
           else if (ch === '=') { underlines += 2; i++; }
@@ -1681,32 +1648,25 @@
             continue;
           }
 
-          // 解析括号内的音符（支持 ^ _ 前缀）
-          let octave = 0;
-          while (i < line.length && (line[i] === '^' || line[i] === '_')) {
-            if (line[i] === '^') octave++;
-            if (line[i] === '_') octave--;
-            i++;
-          }
-          
           // 必须是数字
           if (i >= line.length || !/[1-7]/.test(line[i])) return null;
           const digit = line[i];
           i++;
           
-          // 后缀（升降号）
+          // 后缀（顺序：#b → ^_ → 演奏技法 → / =）
           let accidental = '';
-          if (i < line.length && (line[i] === '#' || line[i] === 'b')) {
-            accidental = line[i];
-            i++;
-          }
-
-          // 解析下划线（八分/十六分音符），支持括号内写法如 (3/)
+          let octave = 0;
           let underlines = 0;
-          while (i < line.length && (line[i] === '/' || line[i] === '=')) {
-            if (line[i] === '/') underlines++;
-            if (line[i] === '=') underlines += 2;
-            i++;
+          
+          while (i < line.length) {
+            const ch = line[i];
+            if (ch === '#') { accidental = '#'; i++; }
+            else if (ch === 'b') { accidental = 'b'; i++; }
+            else if (ch === '^') { octave++; i++; }
+            else if (ch === '_') { octave--; i++; }
+            else if (ch === '/') { underlines++; i++; }
+            else if (ch === '=') { underlines += 2; i++; }
+            else break;
           }
 
           // 检测演奏技法
@@ -2094,10 +2054,11 @@
 
           // 计算小节内基础单位宽度（避免音符紧贴小节线）
           const measureWeight = measureWeights[m];
-          const noteAreaMargin = 12;
+          const noteAreaMargin = measure.repeatStart ? 26 : 12;
           // 每行第一小节左侧不留间距（第一个音符左对齐），其他小节左右对称
+          // 但如果第一小节有前反复号，则保留左侧间距，避免音符与反复号挤在一起
           const isFirstMeasure = m === 0;
-          const leftMargin = isFirstMeasure ? 0 : noteAreaMargin / 2;
+          const leftMargin = (isFirstMeasure && !measure.repeatStart) ? 0 : (measure.repeatStart ? 18 : noteAreaMargin / 2);
           const unitWidth = (measureWidth - noteAreaMargin) / Math.max(measureWeight, 1);
 
           // 预计算每个音符的位置
@@ -2109,7 +2070,8 @@
             const noteWidth = unitWidth * this.getNoteWeight(note);
             let noteX = tempX + noteWidth / 2;
             // 每行第一个小节第一个音符左对齐，消除左侧留白，使各行开头对齐
-            if (m === 0 && i === 0 && noteWidth >= firstNoteSize) {
+            // 但如果小节有前反复号，则不做此处理，以免音符与反复号重叠
+            if (m === 0 && i === 0 && noteWidth >= firstNoteSize && !measure.repeatStart) {
               noteX = tempX + firstNoteSize / 2;
             }
             notePositions.push({
