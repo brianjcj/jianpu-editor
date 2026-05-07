@@ -2370,7 +2370,7 @@
           const techY = note.octave > 0
             ? noteY - size * 0.75 - (note.octave - 1) * 10 - 14
             : noteY - size * 0.65 - 10;
-          const techSize = size * 0.35;
+          const techSize = size * 0.26;
           if (note.technique === '弹') {
             ctx.beginPath();
             ctx.moveTo(x + xOffset - techSize, techY - techSize);
@@ -2551,7 +2551,7 @@
           const techY = note.octave > 0
             ? graceY - size * 0.75 - (note.octave - 1) * 7 - 10
             : graceY - size * 0.6 - 8;
-          const techSize = size * 0.3;
+          const techSize = size * 0.22;
           if (note.technique === '弹') {
             ctx.beginPath();
             ctx.moveTo(graceX + xOffset - techSize, techY - techSize);
@@ -2649,7 +2649,7 @@
             const techY = note.octave > 0
               ? graceY - size * 0.75 - (note.octave - 1) * 7 - 10
               : graceY - size * 0.6 - 8;
-            const techSize = size * 0.3;
+            const techSize = size * 0.22;
             if (note.technique === '弹') {
               ctx.beginPath();
               ctx.moveTo(graceX + xOffset - techSize, techY - techSize);
