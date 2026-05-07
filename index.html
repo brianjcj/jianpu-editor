@@ -1991,7 +1991,7 @@
           const useMaxWidth = (isLastLine && avgMeasureWidth !== null && line.length < lines[0].length)
             ? avgMeasureWidth * 1.2  // 允许稍微宽一点，但不铺满
             : null;
-          this.renderLine(ctx, line, MARGIN_X, y, A4_WIDTH - MARGIN_X * 2, useMaxWidth);
+          this.renderLine(ctx, line, MARGIN_X, y, A4_WIDTH - MARGIN_X * 2, useMaxWidth, settings.timeSignature);
           y += lineHeight + (lineHasLabel[i] ? labelExtraHeight : 0);
         }
 
@@ -2037,7 +2037,7 @@
         return lines;
       }
 
-      renderLine(ctx, lineMeasures, x, y, availableWidth, maxMeasureWidth = null) {
+      renderLine(ctx, lineMeasures, x, y, availableWidth, maxMeasureWidth = null, timeSignature = [4, 4]) {
         // 新布局策略：
         // 1. 计算每小节的总时值权重
         // 2. 按小节权重比例分配每小节的总宽度
@@ -2090,7 +2090,7 @@
           }
 
           // 识别需要连线的音符组
-          const noteGroups = this.groupShortNotes(measure.notes);
+          const noteGroups = this.groupShortNotes(measure.notes, timeSignature);
 
           // 计算小节内基础单位宽度（避免音符紧贴小节线）
           const measureWeight = measureWeights[m];
@@ -2138,8 +2138,8 @@
               }
             }
 
+            const group = noteGroups.find(g => g.indices.includes(i));
             if (note.type === 'note' || note.type === 'beat') {
-              const group = noteGroups.find(g => g.indices.includes(i));
               this.renderNote(ctx, note, pos.x, y, group, notePositions, i);
               // 如果前面有倚音，在这里渲染所有连续倚音（依附于当前主音）
               let graceCount = 0;
@@ -2158,7 +2158,7 @@
                 this.renderGraceGroup(ctx, graceNotes, graceXs, y, pos.x);
               }
             } else if (note.type === 'rest') {
-              this.renderRest(ctx, note, pos.x, y, pos.width);
+              this.renderRest(ctx, note, pos.x, y, pos.width, group);
             } else if (note.type === 'grace') {
               // 倚音本身不在这里渲染，而是在下一个主音位置渲染
               // 但如果倚音在最后一个位置（没有后续主音），则独立渲染
@@ -2256,52 +2256,85 @@
         return 0.4; // 三十二分
       }
 
-      groupShortNotes(notes) {
+      groupShortNotes(notes, timeSignature = [4, 4]) {
         // 将相邻的短音符分组，用于连线下划线
-        // 核心规则：同一组内所有音符共享相同数量的下划线连线
-        // 组的总时值不能超过1拍（4个十六分音符）
+        // 规则：
+        //   - x/4 拍号：按每个四分音符（1拍）为一组，不跨拍
+        //   - 6/8 拍号：每 3 个八分音符（1.5拍）为一组
+        //   - 休止符也参与分组（只打断无下划线的长音符）
+        const [beats, beatUnit] = timeSignature;
+        let groupDuration = 1; // 默认四分音符为单位
+        if (beatUnit === 8 && beats % 3 === 0) {
+          groupDuration = 1.5; // 复拍子（6/8、9/8 等）每大组 3 个八分音符
+        }
+
         const groups = [];
         let currentGroup = null;
+        let accumulated = 0; // 当前在分组周期内的累积时值
+
+        const nearBoundary = (val) => {
+          const mod = val % groupDuration;
+          return mod < 0.001 || mod > groupDuration - 0.001;
+        };
 
         for (let i = 0; i < notes.length; i++) {
           const note = notes[i];
-          if ((note.type === 'note' || note.type === 'beat') && note.underlines > 0) {
-            // 检查是否可以加入当前组
-            let canJoin = currentGroup && this.isCompatible(currentGroup, note);
-            // 连音组内的音符不受1拍限制，保证整组下划线连续
-            if (canJoin && !note.tuplet) {
-              canJoin = !this.isGroupFull(currentGroup, note);
+          const dur = note.duration || 0;
+
+          if (note.underlines > 0) {
+            // 如果连音组兼容性不同，也要断开
+            if (currentGroup && !this.isCompatible(currentGroup, note)) {
+              groups.push(currentGroup);
+              currentGroup = null;
             }
 
-            if (!canJoin) {
-              // 开始新组
-              if (currentGroup) groups.push(currentGroup);
+            // 若当前累积时值正好落在分组边界上，结束旧组
+            if (currentGroup && nearBoundary(accumulated)) {
+              groups.push(currentGroup);
+              currentGroup = null;
+            }
+
+            // 开始新组（如果需要）
+            if (!currentGroup) {
               currentGroup = {
                 indices: [i],
                 notes: [note],
                 underlines: note.underlines
               };
             } else {
-              // 继续当前组
               currentGroup.indices.push(i);
               currentGroup.notes.push(note);
             }
+
+            accumulated += dur;
+
+            // 若加完后正好落在边界，结束当前组，让下一个下划线音符开新组
+            if (nearBoundary(accumulated)) {
+              groups.push(currentGroup);
+              currentGroup = null;
+            }
           } else {
-            // 遇到非短音符，结束当前组
+            // 无下划线的音符（四分、二分、全音符等）打断分组
             if (currentGroup) {
               groups.push(currentGroup);
               currentGroup = null;
             }
+            accumulated += dur;
+            // 边界对齐：如果 accumulated 跨过整数倍 groupDuration，取模
+            const periods = Math.round(accumulated / groupDuration);
+            const target = periods * groupDuration;
+            if (Math.abs(accumulated - target) < 0.001) {
+              accumulated = target;
+            }
           }
         }
-        if (currentGroup) groups.push(currentGroup);
 
+        if (currentGroup) groups.push(currentGroup);
         return groups;
       }
 
       isCompatible(group, note) {
-        // 兼容性检查：相邻的短音符可以混合分组
-        // 连音组内外的音符不能混组
+        // 兼容性检查：连音组内外的音符不能混组
         const lastNote = group.notes[group.notes.length - 1];
         if (lastNote.tuplet || note.tuplet) {
           const a = lastNote.tuplet ? lastNote.tuplet.groupId : null;
@@ -2309,25 +2342,6 @@
           return a === b;
         }
         return true;
-      }
-
-      isGroupFull(group, newNote) {
-        // 计算组内当前总时值（以十六分音符为单位）
-        let currentUnits = 0;
-        for (const n of group.notes) {
-          if (n.underlines >= 3) currentUnits += 0.5; // 三十二分
-          else if (n.underlines === 2) currentUnits += 1; // 十六分
-          else if (n.underlines === 1) currentUnits += 2; // 八分
-        }
-
-        // 新音符的时值
-        let newUnits = 0;
-        if (newNote.underlines >= 3) newUnits = 0.5;
-        else if (newNote.underlines === 2) newUnits = 1;
-        else if (newNote.underlines === 1) newUnits = 2;
-
-        // 一组最多4个单位（1拍）
-        return currentUnits + newUnits > 4;
       }
 
       renderNote(ctx, note, x, y, group, notePositions, noteIdx) {
@@ -2894,7 +2908,7 @@
         }
       }
 
-      renderRest(ctx, note, x, y, noteWidth) {
+      renderRest(ctx, note, x, y, noteWidth, group = null) {
         const size = 20;
 
         ctx.fillStyle = '#1a1a2e';
@@ -2924,8 +2938,8 @@
           ctx.fill();
         }
 
-        // 下划线
-        if (note.underlines > 0) {
+        // 单音符的下划线（不在组内的，或组内只有一个音符的）
+        if (note.underlines > 0 && (!group || group.indices.length === 1)) {
           ctx.strokeStyle = '#1a1a2e';
           ctx.lineWidth = 2;
           const lineY = y + size * 0.4 + 2;
