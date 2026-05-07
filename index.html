@@ -921,9 +921,10 @@
       <textarea class="editor" id="editor" placeholder="在此输入简谱...
 
 试试输入示例：
-1 2 3 4 | 5 6 5 3 | 2 - - - ||
+|: 1 2 3 4 | 5 6 5 3 :| [1 2 - - |] [2 3 - - ||]
 ^1 ^2 ^3 | ^5 ^6 ^5 | ^3 ^2 ^1 ||
 
+反复标记：|:  :|  [1 ]  [2 ]  DC  DS  Fine
 点击右侧「示例」按钮加载完整demo"></textarea>
       <div class="syntax-help panel-hidden">
         <div class="syntax-help-header">
@@ -954,6 +955,15 @@
           <tr><td><code>{3:1/ 2/ 3/}</code></td><td>三连音（N连音通用，如 {5:...}）</td></tr>
           <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
           <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
+          <tr><td><code>|:</code></td><td>前反复号（从此处开始反复）</td></tr>
+          <tr><td><code>:|</code></td><td>后反复号（反复回开头或前反复号）</td></tr>
+          <tr><td><code>[1 ... ]</code></td><td>跳房子（第1房子，支持 [2] [3]）</td></tr>
+          <tr><td><code>DC</code></td><td>从头反复（Da Capo）</td></tr>
+          <tr><td><code>DS</code></td><td>从记号处反复（Dal Segno）</td></tr>
+          <tr><td><code>Fine</code></td><td>结束</td></tr>
+          <tr><td><code>Segno</code></td><td>记号 𝄋（配合 DS 使用）</td></tr>
+          <tr><td><code>Coda</code></td><td>尾声 𝆌</td></tr>
+          <tr><td><code>ToCoda</code></td><td>跳到尾声</td></tr>
           <tr><td><code># 注释</code></td><td>行注释</td></tr>
         </table>
       </div>
@@ -978,6 +988,12 @@
           <button class="fab-key" data-char="|" title="小节线">|</button>
           <button class="fab-key" data-char="||" title="终止线">||</button>
           <button class="fab-key" data-char="-" title="增时线">−</button>
+        </div>
+        <div class="fab-row">
+          <button class="fab-key" data-char="|:" title="前反复号">|:</button>
+          <button class="fab-key" data-char=":|" title="后反复号">:|</button>
+          <button class="fab-key" data-char="[1" title="第1房子">[1</button>
+          <button class="fab-key" data-char="]" title="房子结束">]</button>
         </div>
         <div class="fab-row">
           <button class="fab-key" data-char="{3:}" title="三连音">3⌢</button>
@@ -1022,6 +1038,15 @@
             <tr><td><code>{3:1/ 2/ 3/}</code></td><td>三连音（N连音通用，如 {5:...}）</td></tr>
             <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
             <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
+            <tr><td><code>|:</code></td><td>前反复号（从此处开始反复）</td></tr>
+            <tr><td><code>:|</code></td><td>后反复号（反复回开头或前反复号）</td></tr>
+            <tr><td><code>[1 ... ]</code></td><td>跳房子（第1房子，支持 [2] [3]）</td></tr>
+            <tr><td><code>DC</code></td><td>从头反复（Da Capo）</td></tr>
+            <tr><td><code>DS</code></td><td>从记号处反复（Dal Segno）</td></tr>
+            <tr><td><code>Fine</code></td><td>结束</td></tr>
+            <tr><td><code>Segno</code></td><td>记号 𝄋（配合 DS 使用）</td></tr>
+            <tr><td><code>Coda</code></td><td>尾声 𝆌</td></tr>
+            <tr><td><code>ToCoda</code></td><td>跳到尾声</td></tr>
             <tr><td><code># 注释</code></td><td>行注释</td></tr>
           </table>
         </div>
@@ -1112,7 +1137,7 @@
       parse(text) {
         const lines = text.split('\n');
         const measures = [];
-        let currentMeasure = [];
+        let currentMeasure = this.createEmptyMeasure();
         let globalSettings = { bpm: 120, key: 'C', timeSignature: [4, 4], title: '' };
 
         for (let line of lines) {
@@ -1147,22 +1172,150 @@
           const tokens = this.tokenize(line);
           for (const token of tokens) {
             if (token.type === 'barline') {
-              if (currentMeasure.length > 0) {
-                measures.push({ notes: currentMeasure, isDouble: token.isDouble });
-                currentMeasure = [];
+              if (currentMeasure.notes.length > 0 || currentMeasure.voltaStart !== null || currentMeasure.repeatStart) {
+                currentMeasure.isDouble = token.isDouble;
+                if (token.repeatEnd) currentMeasure.repeatEnd = true;
+                measures.push(currentMeasure);
+                currentMeasure = this.createEmptyMeasure();
               }
+              if (token.repeatStart) {
+                currentMeasure.repeatStart = true;
+              }
+            } else if (token.type === 'voltaStart') {
+              currentMeasure.voltaStart = token.number;
+            } else if (token.type === 'voltaEnd') {
+              currentMeasure.voltaEnd = true;
             } else if (token.type === 'note' || token.type === 'rest' || token.type === 'grace' || token.type === 'beat') {
-              currentMeasure.push(token);
+              currentMeasure.notes.push(token);
+            } else if (['segno','coda','toCoda','dc','ds','fine'].includes(token.type)) {
+              currentMeasure[token.type] = true;
             }
           }
         }
 
         // 收尾小节
-        if (currentMeasure.length > 0) {
-          measures.push({ notes: currentMeasure, isDouble: true });
+        if (currentMeasure.notes.length > 0 || currentMeasure.voltaStart !== null || currentMeasure.repeatStart ||
+            currentMeasure.segno || currentMeasure.coda || currentMeasure.toCoda ||
+            currentMeasure.dc || currentMeasure.ds || currentMeasure.fine) {
+          currentMeasure.isDouble = true;
+          measures.push(currentMeasure);
         }
 
-        return { measures, settings: globalSettings };
+        // 展开反复标记，生成扁平演奏序列
+        const flatMeasures = this.expandRepeats(measures);
+
+        return { measures, flatMeasures, settings: globalSettings };
+      }
+
+      createEmptyMeasure() {
+        return {
+          notes: [],
+          isDouble: false,
+          repeatStart: false,
+          repeatEnd: false,
+          voltaStart: null,
+          voltaEnd: false,
+          segno: false,
+          coda: false,
+          toCoda: false,
+          dc: false,
+          ds: false,
+          fine: false
+        };
+      }
+
+      expandRepeats(measures) {
+        if (!measures || measures.length === 0) return [];
+
+        const flatMeasures = [];
+        let pointer = 0;
+        const visitCount = { dc: 0, ds: 0, toCoda: 0 };
+        const repeatVisits = {};
+        let currentVoltaPass = 1;
+
+        const segnoIndex = measures.findIndex(m => m.segno);
+        const codaIndex = measures.findIndex(m => m.coda);
+
+        while (pointer >= 0 && pointer < measures.length) {
+          const measure = measures[pointer];
+
+          // 跳过非当前房子的跳房子小节
+          if (measure.voltaStart !== null && measure.voltaStart !== currentVoltaPass) {
+            let endPtr = pointer + 1;
+            while (endPtr < measures.length) {
+              if (measures[endPtr].voltaEnd) {
+                endPtr++;
+                break;
+              }
+              if (measures[endPtr].voltaStart !== null) break;
+              endPtr++;
+            }
+            pointer = endPtr;
+            continue;
+          }
+
+          // 流程控制：ToCoda → 跳到 Coda
+          if (measure.toCoda && visitCount.toCoda === 0 && codaIndex >= 0) {
+            visitCount.toCoda = 1;
+            pointer = codaIndex;
+            continue;
+          }
+
+          // 流程控制：DC → 从头反复
+          if (measure.dc && visitCount.dc === 0) {
+            visitCount.dc = 1;
+            currentVoltaPass = 1;
+            pointer = 0;
+            continue;
+          }
+
+          // 流程控制：DS → 从 Segno 反复
+          if (measure.ds && visitCount.ds === 0 && segnoIndex >= 0) {
+            visitCount.ds = 1;
+            currentVoltaPass = 1;
+            pointer = segnoIndex;
+            continue;
+          }
+
+          // Fine → 结束
+          if (measure.fine) {
+            flatMeasures.push(measure);
+            break;
+          }
+
+          flatMeasures.push(measure);
+
+          // 反复结束处理
+          if (measure.repeatEnd) {
+            let repeatStart = -1;
+            let depth = 0;
+            for (let i = pointer; i >= 0; i--) {
+              if (i < pointer && measures[i].repeatEnd) depth++;
+              if (measures[i].repeatStart) {
+                if (depth > 0) depth--;
+                else { repeatStart = i; break; }
+              }
+            }
+            if (repeatStart < 0) repeatStart = 0;
+
+            const repeatKey = 'rep_' + repeatStart + '_' + pointer;
+            const hasVolta = measures.slice(repeatStart, pointer + 1).some(m => m.voltaStart !== null);
+
+            if (!repeatVisits[repeatKey]) {
+              repeatVisits[repeatKey] = 1;
+              if (hasVolta) currentVoltaPass = 2;
+              pointer = repeatStart;
+              continue;
+            } else if (repeatVisits[repeatKey] === 1 && hasVolta) {
+              repeatVisits[repeatKey] = 2;
+              currentVoltaPass = 1;
+            }
+          }
+
+          pointer++;
+        }
+
+        return flatMeasures;
       }
 
       tokenize(line) {
@@ -1172,9 +1325,12 @@
         while (i < line.length) {
           const ch = line[i];
 
-          // 小节线
+          // 小节线（支持 |: 前反复号）
           if (ch === '|') {
-            if (line[i + 1] === '|') {
+            if (line[i + 1] === ':' && line[i + 2] !== '|') {
+              tokens.push({ type: 'barline', isDouble: false, repeatStart: true });
+              i += 2;
+            } else if (line[i + 1] === '|') {
               tokens.push({ type: 'barline', isDouble: true });
               i += 2;
             } else {
@@ -1208,6 +1364,22 @@
               i = tuplet.nextIndex;
               continue;
             }
+          }
+
+          // 跳房子 [1 [2 [3
+          if (ch === '[') {
+            if (line[i + 1] === '1' || line[i + 1] === '2' || line[i + 1] === '3') {
+              tokens.push({ type: 'voltaStart', number: parseInt(line[i + 1]) });
+              i += 2;
+              continue;
+            }
+          }
+
+          // 跳房子结束 ]
+          if (ch === ']') {
+            tokens.push({ type: 'voltaEnd' });
+            i++;
+            continue;
           }
 
           // 音符（包括带 ^ 高音前缀和 _ 低音前缀的）
@@ -1310,6 +1482,38 @@
             i = i2;
             continue;
           }
+
+          // 反复结束 :| 或 :||
+          if (ch === ':') {
+            if (line[i + 1] === '|') {
+              if (line[i + 2] === '|') {
+                tokens.push({ type: 'barline', isDouble: true, repeatEnd: true });
+                i += 3;
+              } else {
+                tokens.push({ type: 'barline', isDouble: false, repeatEnd: true });
+                i += 2;
+              }
+              continue;
+            }
+            i++;
+            continue;
+          }
+
+          // 流程控制指令（按长度降序避免 ToCoda 被 Coda 截断）
+          const flowWords = ['ToCoda', 'Segno', 'Coda', 'Fine', 'DC', 'DS'];
+          let matchedFlow = false;
+          for (const word of flowWords) {
+            if (line.slice(i, i + word.length) === word) {
+              const nextChar = line[i + word.length];
+              if (!nextChar || /[\s|\]:]/.test(nextChar)) {
+                tokens.push({ type: word.toLowerCase() });
+                i += word.length;
+                matchedFlow = true;
+                break;
+              }
+            }
+          }
+          if (matchedFlow) continue;
 
           i++;
         }
@@ -1634,7 +1838,7 @@
       }
 
       render(data) {
-        const { measures, settings } = data;
+        const { measures, flatMeasures, settings } = data;
         if (measures.length === 0) {
           this.renderEmpty();
           return;
@@ -1721,8 +1925,8 @@
         state.key = settings.key;
         state.timeSignature = settings.timeSignature;
 
-        // 收集可播放的音符
-        this.collectPlaybackNotes(measures, settings);
+        // 收集可播放的音符（使用展开后的反复序列）
+        this.collectPlaybackNotes(flatMeasures || measures, settings);
       }
 
       layoutMeasures(measures, maxPerLine) {
@@ -1790,10 +1994,25 @@
 
         // 渲染每小节
         let currentX = x;
+        let voltaStartX = null;
+        let voltaNumber = null;
+
         for (let m = 0; m < lineMeasures.length; m++) {
           const measure = lineMeasures[m];
           const measureWidth = measureWidths[m];
           const isLast = m === lineMeasures.length - 1;
+          const measureStartX = currentX;
+
+          // 前反复号
+          if (measure.repeatStart) {
+            this.drawRepeatStart(ctx, currentX, y);
+          }
+
+          // 跳房子开始
+          if (measure.voltaStart !== null && voltaStartX === null) {
+            voltaStartX = currentX;
+            voltaNumber = measure.voltaStart;
+          }
 
           // 识别需要连线的音符组
           const noteGroups = this.groupShortNotes(measure.notes);
@@ -1910,8 +2129,11 @@
           // 更新 currentX 到小节末尾
           currentX += measureWidth;
 
-          // 终止双竖线（两条竖线：细线+粗线）
-          if (measure.isDouble && isLast) {
+          // 反复标记与结束线
+          if (measure.repeatEnd) {
+            this.drawRepeatEnd(ctx, currentX, y, measure.isDouble && isLast);
+          } else if (measure.isDouble && isLast) {
+            // 终止双竖线（两条竖线：细线+粗线）
             ctx.strokeStyle = '#1a1a2e';
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -1926,7 +2148,7 @@
             ctx.lineTo(currentX + 5, y + 23);
             ctx.stroke();
           } else {
-            // 普通小节线（延长以覆盖三十二分音符下划线）
+            // 普通小节线
             ctx.strokeStyle = '#1a1a2e';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
@@ -1934,6 +2156,16 @@
             ctx.lineTo(currentX, y + 23);
             ctx.stroke();
           }
+
+          // 跳房子结束
+          if (measure.voltaEnd && voltaStartX !== null) {
+            this.drawVoltaBracket(ctx, voltaStartX, currentX, y, voltaNumber);
+            voltaStartX = null;
+            voltaNumber = null;
+          }
+
+          // 流程控制文字标记
+          this.drawFlowMark(ctx, measure, measureStartX, y, measureWidth);
         }
       }
 
@@ -2632,6 +2864,119 @@
         ctx.fillText('例如: 1 2 3 4 | 5 6 5 3 | 2 - - - ||', A4_WIDTH / 2, 200 + 20);
       }
 
+      drawRepeatStart(ctx, x, y) {
+        const dotRadius = 2.5;
+        const dotOffsetX = 5;
+        const dotY1 = y - 6;
+        const dotY2 = y + 6;
+
+        // 细线
+        ctx.strokeStyle = '#1a1a2e';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, y - 20);
+        ctx.lineTo(x, y + 23);
+        ctx.stroke();
+
+        // 两个圆点
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath();
+        ctx.arc(x + dotOffsetX, dotY1, dotRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x + dotOffsetX, dotY2, dotRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      drawRepeatEnd(ctx, x, y, isDouble) {
+        const dotRadius = 2.5;
+        const dotOffsetX = 6;
+        const dotY1 = y - 6;
+        const dotY2 = y + 6;
+
+        // 两个圆点
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath();
+        ctx.arc(x - dotOffsetX, dotY1, dotRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x - dotOffsetX, dotY2, dotRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 粗线
+        ctx.strokeStyle = '#1a1a2e';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x, y - 20);
+        ctx.lineTo(x, y + 23);
+        ctx.stroke();
+
+        if (isDouble) {
+          // 第二条细线（终止线）
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(x + 5, y - 20);
+          ctx.lineTo(x + 5, y + 23);
+          ctx.stroke();
+        }
+      }
+
+      drawVoltaBracket(ctx, startX, endX, y, number) {
+        const bracketY = y - 32;
+        const bracketHeight = 10;
+
+        ctx.strokeStyle = '#1a1a2e';
+        ctx.lineWidth = 1.5;
+
+        // 横线
+        ctx.beginPath();
+        ctx.moveTo(startX + 4, bracketY);
+        ctx.lineTo(endX, bracketY);
+        ctx.stroke();
+
+        // 右侧竖线
+        ctx.beginPath();
+        ctx.moveTo(endX, bracketY);
+        ctx.lineTo(endX, bracketY + bracketHeight);
+        ctx.stroke();
+
+        // 编号文字
+        ctx.fillStyle = '#1a1a2e';
+        ctx.font = `bold 12px "Segoe UI", "PingFang SC", sans-serif`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(number + '.', startX + 2, bracketY - 1);
+      }
+
+      drawFlowMark(ctx, measure, x, y, measureWidth) {
+        const markY = y + 38;
+        const items = [];
+
+        if (measure.segno) items.push('𝄋');
+        if (measure.coda) items.push('𝆌');
+        if (measure.dc) items.push('D.C.');
+        if (measure.ds) items.push('D.S.');
+        if (measure.fine) items.push('Fine');
+        if (measure.toCoda) items.push('To 𝆌');
+
+        if (items.length === 0) return;
+
+        ctx.fillStyle = '#555';
+        ctx.font = `italic 11px "Segoe UI", "PingFang SC", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        // 特殊符号用稍大字号
+        const hasSymbols = measure.segno || measure.coda;
+        if (hasSymbols) {
+          ctx.font = `14px "Segoe UI", sans-serif`;
+          ctx.textBaseline = 'middle';
+          ctx.fillText(items.join('  '), x + measureWidth / 2, markY);
+        } else {
+          ctx.fillText(items.join('  '), x + measureWidth / 2, markY);
+        }
+      }
+
       collectPlaybackNotes(measures, settings) {
         const notes = [];
         let time = 0;
@@ -2973,13 +3318,21 @@
 
     // 示例按钮
     document.getElementById('btnExample').addEventListener('click', () => {
-      const example = `!小星星
+      const example = `!小星星（含反复标记演示）
 %C=4/4
 @100
 
-1 1 5 5 | 6 6 5 - | 4 4 3 3 | 2 2 1 - |
-5 5 4 4 | 3 3 2 - | 5 5 4 4 | 3 3 2 - |
-1 1 5 5 | 6 6 5 - | 4 4 3 3 | 2 2 1 - ||`;
+|: 1 1 5 5 | 6 6 5 - |
+[1 4 4 3 3 | 2 2 1 - |]
+[2 5 5 4 4 | 3 3 2 - |] :|
+1 1 5 5 | 6 6 5 - | 4 4 3 3 | 2 2 1 - ||
+
+# 反复记号线速查：
+# |: 前反复号   :| 后反复号
+# [1 ] 第1房子  [2 ] 第2房子
+# DC 从头反复   DS 从记号反复
+# Fine 结束     Segno 记号 𝄋
+# Coda 尾声 𝆌   ToCoda 跳到尾声`;
       editor.value = example;
       render();
       status.innerHTML = '<span class="status-dot"></span>已加载：小星星';
