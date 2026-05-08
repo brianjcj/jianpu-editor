@@ -218,6 +218,59 @@
       border-color: var(--primary) !important;
     }
 
+    /* Volume control */
+    .volume-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 8px;
+      flex-shrink: 0;
+    }
+    .volume-control svg {
+      flex-shrink: 0;
+      color: var(--text-muted);
+    }
+    .volume-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 80px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--outline);
+      outline: none;
+      cursor: pointer;
+    }
+    .volume-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+      box-shadow: var(--shadow-1);
+      transition: transform 0.15s;
+    }
+    .volume-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+    .volume-slider::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+      border: none;
+      box-shadow: var(--shadow-1);
+    }
+    .volume-value {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      min-width: 28px;
+      text-align: right;
+    }
+
     .panel-toggle {
       display: flex;
       gap: 4px;
@@ -539,8 +592,8 @@
     /* 浮动虚拟键盘 */
     .fab-keyboard {
       position: fixed;
-      top: 100px;
-      right: 20px;
+      top: 16px;
+      right: 16px;
       z-index: 100;
       display: none;
       flex-direction: column;
@@ -897,6 +950,11 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
           预览
         </button>
+        <div class="volume-control" title="音量">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+          <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="70">
+          <span class="volume-value" id="volumeValue">70%</span>
+        </div>
       </div>
     </div>
   </header>
@@ -2308,7 +2366,7 @@
 
       renderNote(ctx, note, x, y, group, notePositions, noteIdx) {
         const size = 20; // 缩小字号适配 A4
-        const dotRadius = 2.5;
+        const dotRadius = 2;
 
         ctx.fillStyle = '#1a1a2e';
         ctx.font = `bold ${size}px "Segoe UI", "PingFang SC", sans-serif`;
@@ -2953,7 +3011,7 @@
       }
 
       drawRepeatStart(ctx, x, y) {
-        const dotRadius = 2.5;
+        const dotRadius = 1.5;
         const dotOffsetX = 5;
         const dotY1 = y - 6;
         const dotY2 = y + 6;
@@ -2977,7 +3035,7 @@
       }
 
       drawRepeatEnd(ctx, x, y, isDouble) {
-        const dotRadius = 2.5;
+        const dotRadius = 1.5;
         const dotOffsetX = 6;
         const dotY1 = y - 6;
         const dotY2 = y + 6;
@@ -3199,14 +3257,21 @@
         this.audioCtx = null;
         this.isPlaying = false;
         this.currentSources = [];
+        this.masterGain = null;
+        this.volume = 0.7;
       }
 
       initAudio() {
         if (!this.audioCtx) {
           this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          this.masterGain = this.audioCtx.createGain();
+          this.masterGain.connect(this.audioCtx.destination);
         }
         if (this.audioCtx.state === 'suspended') {
           this.audioCtx.resume();
+        }
+        if (this.masterGain) {
+          this.masterGain.gain.setValueAtTime(this.volume, this.audioCtx.currentTime);
         }
       }
 
@@ -3229,7 +3294,7 @@
           const gain = this.audioCtx.createGain();
 
           osc.connect(gain);
-          gain.connect(this.audioCtx.destination);
+          gain.connect(this.masterGain || this.audioCtx.destination);
 
           const startTime = now + note.startTime;
           const endTime = startTime + note.duration;
@@ -3239,7 +3304,7 @@
             osc.type = 'triangle';
             osc.frequency.value = 120;
             gain.gain.setValueAtTime(0, startTime);
-            gain.gain.linearRampToValueAtTime(0.5, startTime + 0.005); // 极快 Attack
+            gain.gain.linearRampToValueAtTime(0.6 * this.volume, startTime + 0.005); // 极快 Attack
             gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.08); // 快速衰减
             osc.start(startTime);
             osc.stop(startTime + 0.1);
@@ -3255,8 +3320,8 @@
 
             // ADSR 包络 + 自然结束淡出
             gain.gain.setValueAtTime(0, startTime);
-            gain.gain.linearRampToValueAtTime(0.3, startTime + 0.02); // Attack
-            gain.gain.setValueAtTime(0.3, endTime - 0.05); // Sustain
+            gain.gain.linearRampToValueAtTime(0.7 * this.volume, startTime + 0.02); // Attack
+            gain.gain.setValueAtTime(0.7 * this.volume, endTime - 0.05); // Sustain
             gain.gain.exponentialRampToValueAtTime(0.001, endTime); // Release
 
             osc.start(startTime);
@@ -3387,6 +3452,16 @@
       player.stop();
       document.getElementById('btnPlay').innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> 播放';
       document.getElementById('btnPlay').classList.remove('btn-active');
+    });
+
+    // 音量滑块
+    document.getElementById('volumeSlider').addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      player.volume = val / 100;
+      document.getElementById('volumeValue').textContent = val + '%';
+      if (player.masterGain && player.audioCtx) {
+        player.masterGain.gain.setValueAtTime(player.volume, player.audioCtx.currentTime);
+      }
     });
 
     // 打印按钮
