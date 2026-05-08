@@ -1992,7 +1992,6 @@
         ctx.fillText(keyText, MARGIN_X, y);
         y += lineHeight * 0.75;
 
-        // 渲染每行
         // 先计算前面行的平均小节宽度，作为最后一行的限制
         let avgMeasureWidth = null;
         if (lines.length > 1) {
@@ -2007,13 +2006,14 @@
           }
           avgMeasureWidth = totalWidth / totalCount;
         }
-        
+
+        // 渲染每行
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
-          // 最后一行（小节数明显少于前面的行）限制最大小节宽度
+          // 最后一行（小节数明显少于前面的行）限制最大小节宽度，不必强行对齐
           const isLastLine = (i === lines.length - 1);
           const useMaxWidth = (isLastLine && avgMeasureWidth !== null && line.length < lines[0].length)
-            ? avgMeasureWidth * 1.2  // 允许稍微宽一点，但不铺满
+            ? avgMeasureWidth * 1.2
             : null;
           this.renderLine(ctx, line, MARGIN_X, y, A4_WIDTH - MARGIN_X * 2, useMaxWidth, settings.timeSignature);
           y += lineHeight + (lineHasLabel[i] ? labelExtraHeight : 0);
@@ -2068,8 +2068,11 @@
         // 3. 小节内部再按音符权重分配位置
         // 这样同一个小节在不同行宽度一致，行与行对齐
 
+        const REPEAT_END_EXTRA = 14; // 后反复号后的额外间距（像素）
+
         const measureWeights = [];
         let lineTotalWeight = 0;
+        let totalExtra = 0;
         for (const measure of lineMeasures) {
           let mw = 0;
           for (const note of measure.notes) {
@@ -2077,16 +2080,21 @@
           }
           measureWeights.push(mw);
           lineTotalWeight += mw;
+          if (measure.repeatEnd) totalExtra += REPEAT_END_EXTRA;
         }
+
+        const baseAvailable = Math.max(availableWidth - totalExtra, 1);
 
         // 计算每小节的分配宽度（按权重比例）
         const measureWidths = [];
         for (let i = 0; i < lineMeasures.length; i++) {
           const ratio = measureWeights[i] / lineTotalWeight;
-          let width = availableWidth * ratio;
-          // 如果限制了最大小节宽度，则不超过该限制
+          let width = baseAvailable * ratio;
           if (maxMeasureWidth !== null) {
             width = Math.min(width, maxMeasureWidth);
+          }
+          if (lineMeasures[i].repeatEnd) {
+            width += REPEAT_END_EXTRA;
           }
           measureWidths.push(width);
         }
@@ -2123,12 +2131,23 @@
           // 若前一小节有后反复号，则本小节前反复号会被合并绘制，不必额外留宽
           const prevHasRepeatEnd = m > 0 && lineMeasures[m - 1].repeatEnd;
           const effectiveRepeatStart = measure.repeatStart && !prevHasRepeatEnd;
-          const noteAreaMargin = (effectiveRepeatStart ? 26 : 12) + (measure.repeatEnd ? 12 : 0);
+          // 后反复号的额外间距已通过 measureWidth 提供，不再从 noteAreaMargin 扣除
+          const baseMeasureWidth = measureWidth - (measure.repeatEnd ? REPEAT_END_EXTRA : 0);
+          const noteAreaMargin = (effectiveRepeatStart ? 26 : 12);
           // 每行第一小节左侧不留间距（第一个音符左对齐），其他小节左右对称
           // 但如果第一小节有前反复号，则保留左侧间距，避免音符与反复号挤在一起
           const isFirstMeasure = m === 0;
-          const leftMargin = (isFirstMeasure && !effectiveRepeatStart) ? 0 : (effectiveRepeatStart ? 18 : noteAreaMargin / 2);
-          const unitWidth = (measureWidth - noteAreaMargin) / Math.max(measureWeight, 1);
+          let leftMargin;
+          if (isFirstMeasure && !effectiveRepeatStart) {
+            leftMargin = 0;
+          } else if (effectiveRepeatStart) {
+            leftMargin = 18;
+          } else if (prevHasRepeatEnd) {
+            leftMargin = 12; // 后反复号/合并反复号后需要更大间距
+          } else {
+            leftMargin = noteAreaMargin / 2;
+          }
+          const unitWidth = (baseMeasureWidth - noteAreaMargin) / Math.max(measureWeight, 1);
 
           // 预计算每个音符的位置
           const notePositions = [];
@@ -2238,10 +2257,11 @@
           // 反复标记与结束线
           if (measure.repeatEnd) {
             const nextHasStart = m + 1 < lineMeasures.length && lineMeasures[m + 1].repeatStart;
+            // 统一向左偏移 5px，让粗线/最右端对齐 currentX（行尾对齐）
             if (nextHasStart) {
-              this.drawRepeatBoth(ctx, currentX, y, measure.isDouble && isLast);
+              this.drawRepeatBoth(ctx, currentX - 5, y, measure.isDouble && isLast);
             } else {
-              this.drawRepeatEnd(ctx, currentX, y, measure.isDouble && isLast);
+              this.drawRepeatEnd(ctx, currentX - 5, y, measure.isDouble && isLast);
             }
           } else if (measure.isDouble && isLast) {
             // 终止双竖线（两条竖线：细线+粗线）
@@ -2270,7 +2290,9 @@
 
           // 跳房子结束
           if (measure.voltaEnd && voltaStartX !== null) {
-            this.drawVoltaBracket(ctx, voltaStartX, currentX, y, voltaNumber);
+            // 有后反复号时，跳房子线对齐到后反复号的细线位置
+            const voltaEndX = measure.repeatEnd ? currentX - 5 : currentX;
+            this.drawVoltaBracket(ctx, voltaStartX, voltaEndX, y, voltaNumber);
             voltaStartX = null;
             voltaNumber = null;
           }
@@ -2278,10 +2300,6 @@
           // 流程控制文字标记
           this.drawFlowMark(ctx, measure, measureStartX, y, measureWidth);
 
-          // 后反复号右侧留额外间距，避免与下一小节音符挤在一起
-          if (measure.repeatEnd) {
-            currentX += 12;
-          }
         }
       }
 
