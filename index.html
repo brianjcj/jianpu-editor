@@ -2123,7 +2123,7 @@
           // 若前一小节有后反复号，则本小节前反复号会被合并绘制，不必额外留宽
           const prevHasRepeatEnd = m > 0 && lineMeasures[m - 1].repeatEnd;
           const effectiveRepeatStart = measure.repeatStart && !prevHasRepeatEnd;
-          const noteAreaMargin = effectiveRepeatStart ? 26 : 12;
+          const noteAreaMargin = (effectiveRepeatStart ? 26 : 12) + (measure.repeatEnd ? 12 : 0);
           // 每行第一小节左侧不留间距（第一个音符左对齐），其他小节左右对称
           // 但如果第一小节有前反复号，则保留左侧间距，避免音符与反复号挤在一起
           const isFirstMeasure = m === 0;
