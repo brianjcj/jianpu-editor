@@ -1542,10 +1542,16 @@
             continue;
           }
 
-          // 反复结束 :| 或 :||
+          // 反复结束 :| 或 :||，以及复合反复号 :|: 或 :||:
           if (ch === ':') {
             if (line[i + 1] === '|') {
-              if (line[i + 2] === '|') {
+              if (line[i + 2] === ':') {
+                tokens.push({ type: 'barline', isDouble: false, repeatEnd: true, repeatStart: true });
+                i += 3;
+              } else if (line[i + 2] === '|' && line[i + 3] === ':') {
+                tokens.push({ type: 'barline', isDouble: true, repeatEnd: true, repeatStart: true });
+                i += 4;
+              } else if (line[i + 2] === '|') {
                 tokens.push({ type: 'barline', isDouble: true, repeatEnd: true });
                 i += 3;
               } else {
@@ -2096,9 +2102,11 @@
           const isLast = m === lineMeasures.length - 1;
           const measureStartX = currentX;
 
-          // 前反复号
+          // 前反复号（若前一小节有后反复号，则两者合并绘制，这里跳过）
           if (measure.repeatStart) {
-            this.drawRepeatStart(ctx, currentX, y);
+            if (m === 0 || !lineMeasures[m - 1].repeatEnd) {
+              this.drawRepeatStart(ctx, currentX, y);
+            }
           }
 
           // 跳房子开始
@@ -2112,11 +2120,14 @@
 
           // 计算小节内基础单位宽度（避免音符紧贴小节线）
           const measureWeight = measureWeights[m];
-          const noteAreaMargin = measure.repeatStart ? 26 : 12;
+          // 若前一小节有后反复号，则本小节前反复号会被合并绘制，不必额外留宽
+          const prevHasRepeatEnd = m > 0 && lineMeasures[m - 1].repeatEnd;
+          const effectiveRepeatStart = measure.repeatStart && !prevHasRepeatEnd;
+          const noteAreaMargin = effectiveRepeatStart ? 26 : 12;
           // 每行第一小节左侧不留间距（第一个音符左对齐），其他小节左右对称
           // 但如果第一小节有前反复号，则保留左侧间距，避免音符与反复号挤在一起
           const isFirstMeasure = m === 0;
-          const leftMargin = (isFirstMeasure && !measure.repeatStart) ? 0 : (measure.repeatStart ? 18 : noteAreaMargin / 2);
+          const leftMargin = (isFirstMeasure && !effectiveRepeatStart) ? 0 : (effectiveRepeatStart ? 18 : noteAreaMargin / 2);
           const unitWidth = (measureWidth - noteAreaMargin) / Math.max(measureWeight, 1);
 
           // 预计算每个音符的位置
@@ -2129,7 +2140,7 @@
             let noteX = tempX + noteWidth / 2;
             // 每行第一个小节第一个音符左对齐，消除左侧留白，使各行开头对齐
             // 但如果小节有前反复号，则不做此处理，以免音符与反复号重叠
-            if (m === 0 && i === 0 && noteWidth >= firstNoteSize && !measure.repeatStart) {
+            if (m === 0 && i === 0 && noteWidth >= firstNoteSize && !effectiveRepeatStart) {
               noteX = tempX + firstNoteSize / 2;
             }
             notePositions.push({
@@ -2226,7 +2237,12 @@
 
           // 反复标记与结束线
           if (measure.repeatEnd) {
-            this.drawRepeatEnd(ctx, currentX, y, measure.isDouble && isLast);
+            const nextHasStart = m + 1 < lineMeasures.length && lineMeasures[m + 1].repeatStart;
+            if (nextHasStart) {
+              this.drawRepeatBoth(ctx, currentX, y, measure.isDouble && isLast);
+            } else {
+              this.drawRepeatEnd(ctx, currentX, y, measure.isDouble && isLast);
+            }
           } else if (measure.isDouble && isLast) {
             // 终止双竖线（两条竖线：细线+粗线）
             ctx.strokeStyle = '#1a1a2e';
@@ -2261,6 +2277,11 @@
 
           // 流程控制文字标记
           this.drawFlowMark(ctx, measure, measureStartX, y, measureWidth);
+
+          // 后反复号右侧留额外间距，避免与下一小节音符挤在一起
+          if (measure.repeatEnd) {
+            currentX += 12;
+          }
         }
       }
 
@@ -2430,7 +2451,7 @@
           ctx.strokeStyle = '#1a1a2e';
           ctx.lineWidth = 2;
           const lineY = noteY + size * 0.4 + 2;
-          const lineWidth = size * 0.7; // 覆盖音符宽度的70%
+          const lineWidth = size * 0.567; // 覆盖音符宽度的70%
 
           for (let i = 0; i < note.underlines; i++) {
             ctx.beginPath();
@@ -2604,7 +2625,7 @@
           ctx.strokeStyle = '#1a1a2e';
           ctx.lineWidth = 1.2;
           const lineY = graceY + size * 0.4 + 1;
-          const lineWidth = size * 0.6;
+          const lineWidth = size * 0.486;
 
           for (let i = 0; i < note.underlines; i++) {
             ctx.beginPath();
@@ -2717,8 +2738,8 @@
                 const endX = xs[segEnd] - size * 0.8;
                 const lineY = baseLineY + line * lineSpacing;
                 ctx.beginPath();
-                ctx.moveTo(startX - size * 0.3, lineY);
-                ctx.lineTo(endX + size * 0.3, lineY);
+                ctx.moveTo(startX - size * 0.243, lineY);
+                ctx.lineTo(endX + size * 0.243, lineY);
                 ctx.stroke();
                 segStart = -1;
               }
@@ -2839,8 +2860,8 @@
 
         // 画第一条下划线（所有音符都连）
         // 使用音符宽度，让线覆盖音符宽度的70%
-        const firstLeft = firstPos.x - size * 0.35;
-        const lastRight = lastPos.x + size * 0.35;
+        const firstLeft = firstPos.x - size * 0.2835;
+        const lastRight = lastPos.x + size * 0.2835;
         ctx.beginPath();
         ctx.moveTo(firstLeft, baseLineY);
         ctx.lineTo(lastRight, baseLineY);
@@ -2871,7 +2892,7 @@
 
           if (i === j) {
             // 单个孤立的十六分音符，单独画一条短线
-            const lineWidth = size * 0.7;
+            const lineWidth = size * 0.567;
             ctx.beginPath();
             ctx.moveTo(startPos.x - lineWidth / 2, lineY);
             ctx.lineTo(startPos.x + lineWidth / 2, lineY);
@@ -2881,8 +2902,8 @@
             const endIdx = group.indices[sixteenthIndices[j]];
             const endPos = notePositions[endIdx];
             ctx.beginPath();
-            ctx.moveTo(startPos.x - size * 0.35, lineY);
-            ctx.lineTo(endPos.x + size * 0.35, lineY);
+            ctx.moveTo(startPos.x - size * 0.2835, lineY);
+            ctx.lineTo(endPos.x + size * 0.2835, lineY);
             ctx.stroke();
           }
 
@@ -2910,7 +2931,7 @@
           const startPos = notePositions[startIdx];
 
           if (k === m) {
-            const lineWidth = size * 0.7;
+            const lineWidth = size * 0.567;
             ctx.beginPath();
             ctx.moveTo(startPos.x - lineWidth / 2, lineY3);
             ctx.lineTo(startPos.x + lineWidth / 2, lineY3);
@@ -2919,8 +2940,8 @@
             const endIdx = group.indices[thirtySecondIndices[m]];
             const endPos = notePositions[endIdx];
             ctx.beginPath();
-            ctx.moveTo(startPos.x - size * 0.35, lineY3);
-            ctx.lineTo(endPos.x + size * 0.35, lineY3);
+            ctx.moveTo(startPos.x - size * 0.2835, lineY3);
+            ctx.lineTo(endPos.x + size * 0.2835, lineY3);
             ctx.stroke();
           }
 
@@ -2963,7 +2984,7 @@
           ctx.strokeStyle = '#1a1a2e';
           ctx.lineWidth = 2;
           const lineY = y + size * 0.4 + 2;
-          const lineWidth = size * 0.6;
+          const lineWidth = size * 0.486;
 
           for (let i = 0; i < note.underlines; i++) {
             ctx.beginPath();
@@ -3016,21 +3037,28 @@
         const dotY1 = y - 6;
         const dotY2 = y + 6;
 
-        // 细线
+        // 粗线（最左侧）
         ctx.strokeStyle = '#1a1a2e';
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(x, y - 20);
         ctx.lineTo(x, y + 23);
         ctx.stroke();
 
-        // 两个圆点
+        // 细线（粗线右侧）
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x + 5, y - 20);
+        ctx.lineTo(x + 5, y + 23);
+        ctx.stroke();
+
+        // 两个圆点（细线右侧）
         ctx.fillStyle = '#1a1a2e';
         ctx.beginPath();
-        ctx.arc(x + dotOffsetX, dotY1, dotRadius, 0, Math.PI * 2);
+        ctx.arc(x + 5 + dotOffsetX, dotY1, dotRadius, 0, Math.PI * 2);
         ctx.fill();
         ctx.beginPath();
-        ctx.arc(x + dotOffsetX, dotY2, dotRadius, 0, Math.PI * 2);
+        ctx.arc(x + 5 + dotOffsetX, dotY2, dotRadius, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -3040,7 +3068,7 @@
         const dotY1 = y - 6;
         const dotY2 = y + 6;
 
-        // 两个圆点
+        // 两个圆点（最左侧）
         ctx.fillStyle = '#1a1a2e';
         ctx.beginPath();
         ctx.arc(x - dotOffsetX, dotY1, dotRadius, 0, Math.PI * 2);
@@ -3049,22 +3077,78 @@
         ctx.arc(x - dotOffsetX, dotY2, dotRadius, 0, Math.PI * 2);
         ctx.fill();
 
-        // 粗线
+        // 细线（圆点右侧）
         ctx.strokeStyle = '#1a1a2e';
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(x, y - 20);
         ctx.lineTo(x, y + 23);
         ctx.stroke();
 
+        // 粗线（最右侧）
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x + 5, y - 20);
+        ctx.lineTo(x + 5, y + 23);
+        ctx.stroke();
+
         if (isDouble) {
-          // 第二条细线（终止线）
+          // 第三条终止线
           ctx.lineWidth = 1.5;
           ctx.beginPath();
-          ctx.moveTo(x + 5, y - 20);
-          ctx.lineTo(x + 5, y + 23);
+          ctx.moveTo(x + 10, y - 20);
+          ctx.lineTo(x + 10, y + 23);
           ctx.stroke();
         }
+      }
+
+      drawRepeatBoth(ctx, x, y, isDouble) {
+        const dotRadius = 1.5;
+        const dotOffsetX = 5;
+        const dotY1 = y - 6;
+        const dotY2 = y + 6;
+
+        // 左侧两点（后反复号）
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath();
+        ctx.arc(x - 6, dotY1, dotRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x - 6, dotY2, dotRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 细线
+        ctx.strokeStyle = '#1a1a2e';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, y - 20);
+        ctx.lineTo(x, y + 23);
+        ctx.stroke();
+
+        // 粗线
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x + 5, y - 20);
+        ctx.lineTo(x + 5, y + 23);
+        ctx.stroke();
+
+        if (isDouble) {
+          // 第三条终止线
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(x + 10, y - 20);
+          ctx.lineTo(x + 10, y + 23);
+          ctx.stroke();
+        }
+
+        // 右侧两点（前反复号）
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath();
+        ctx.arc(x + 5 + dotOffsetX, dotY1, dotRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x + 5 + dotOffsetX, dotY2, dotRadius, 0, Math.PI * 2);
+        ctx.fill();
       }
 
       drawVoltaBracket(ctx, startX, endX, y, number) {
