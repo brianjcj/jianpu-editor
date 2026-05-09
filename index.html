@@ -2227,7 +2227,6 @@
       getSVG() {
         const vb = `0 0 ${this.viewBoxW} ${this.viewBoxH}`;
         const content = this.elements.join('\n  ');
-        // 物理尺寸固定为 A4 宽度 210mm，高度按 viewBox 比例
         const widthMm = 210;
         const heightMm = (this.viewBoxH / this.viewBoxW) * widthMm;
         return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${widthMm}mm" height="${heightMm}mm" viewBox="${vb}">\n  ${content}\n</svg>`;
