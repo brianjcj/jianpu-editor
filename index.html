@@ -2086,6 +2086,158 @@
       }
     }
 
+    // ===== SVG 渲染辅助类 =====
+    function parseFont(fontStr) {
+      let s = fontStr.trim();
+      let weight = 'normal';
+      let style = 'normal';
+
+      if (/^italic\s+/i.test(s)) {
+        style = 'italic';
+        s = s.replace(/^italic\s+/i, '');
+      }
+
+      const wMatch = s.match(/^(bold|bolder|lighter|\d{3})\s+/i);
+      if (wMatch) {
+        weight = wMatch[1].toLowerCase();
+        s = s.replace(/^(bold|bolder|lighter|\d{3})\s+/i, '');
+      }
+
+      const sizeMatch = s.match(/^(\d+(?:\.\d+)?)\s*px\s+/i);
+      const size = sizeMatch ? sizeMatch[1] : '10';
+      if (sizeMatch) s = s.slice(sizeMatch[0].length);
+
+      let family = s.trim().replace(/["']/g, '');
+      return { weight, style, size, family };
+    }
+
+    function escAttr(str) {
+      return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    }
+    function escXml(str) {
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function fmt(n) {
+      return parseFloat(n.toFixed(3));
+    }
+
+    class SVGContext {
+      constructor(width, height, viewBoxW, viewBoxH, scale) {
+        this.width = width;
+        this.height = height;
+        this.viewBoxW = viewBoxW;
+        this.viewBoxH = viewBoxH;
+        this.scale = scale;
+        this.elements = [];
+        this._fillStyle = '#000';
+        this._strokeStyle = '#000';
+        this._font = '10px sans-serif';
+        this._textAlign = 'start';
+        this._textBaseline = 'alphabetic';
+        this._lineWidth = 1;
+        this._currentPath = null;
+      }
+
+      set fillStyle(v) { this._fillStyle = v; }
+      get fillStyle() { return this._fillStyle; }
+      set strokeStyle(v) { this._strokeStyle = v; }
+      get strokeStyle() { return this._strokeStyle; }
+      set font(v) { this._font = v; }
+      get font() { return this._font; }
+      set textAlign(v) { this._textAlign = v; }
+      get textAlign() { return this._textAlign; }
+      set textBaseline(v) { this._textBaseline = v; }
+      get textBaseline() { return this._textBaseline; }
+      set lineWidth(v) { this._lineWidth = v; }
+      get lineWidth() { return this._lineWidth; }
+
+      fillRect(x, y, w, h) {
+        this.elements.push(`<rect x="${fmt(x)}" y="${fmt(y)}" width="${fmt(w)}" height="${fmt(h)}" fill="${escAttr(this._fillStyle)}"/>`);
+      }
+
+      fillText(text, x, y) {
+        const anchor = this._textAlign === 'center' ? 'middle' : this._textAlign === 'right' ? 'end' : 'start';
+        let baseline = this._textBaseline;
+        if (baseline === 'middle') baseline = 'central';
+        else if (baseline === 'top') baseline = 'hanging';
+        const { weight, style, size, family } = parseFont(this._font);
+        const styleAttr = style !== 'normal' ? ` font-style="${escAttr(style)}"` : '';
+        const weightAttr = weight !== 'normal' ? ` font-weight="${escAttr(weight)}"` : '';
+        this.elements.push(`<text x="${fmt(x)}" y="${fmt(y)}" text-anchor="${anchor}" dominant-baseline="${baseline}" font-family="${escAttr(family)}" font-size="${escAttr(size)}"${styleAttr}${weightAttr} fill="${escAttr(this._fillStyle)}">${escXml(text)}</text>`);
+      }
+
+      beginPath() {
+        this._currentPath = [];
+      }
+
+      moveTo(x, y) {
+        this._currentPath.push(`M${fmt(x)},${fmt(y)}`);
+      }
+
+      lineTo(x, y) {
+        this._currentPath.push(`L${fmt(x)},${fmt(y)}`);
+      }
+
+      arc(x, y, r, startAngle, endAngle, anticlockwise = false) {
+        // 先判断整圆（在取模之前，否则 2π 会被模成 0）
+        const rawDiff = endAngle - startAngle;
+        if (Math.abs(rawDiff) >= Math.PI * 2 - 0.001) {
+          this._currentPath.push(`M${fmt(x + r)},${fmt(y)} A${fmt(r)},${fmt(r)} 0 1,0 ${fmt(x - r)},${fmt(y)} A${fmt(r)},${fmt(r)} 0 1,0 ${fmt(x + r)},${fmt(y)}`);
+          return;
+        }
+
+        startAngle = ((startAngle % (Math.PI * 2)) + (Math.PI * 2)) % (Math.PI * 2);
+        endAngle = ((endAngle % (Math.PI * 2)) + (Math.PI * 2)) % (Math.PI * 2);
+
+        let diff = endAngle - startAngle;
+        if (!anticlockwise && diff < 0) diff += Math.PI * 2;
+        if (anticlockwise && diff > 0) diff -= Math.PI * 2;
+
+        if (Math.abs(diff) < 0.001) return; // 零长度弧，跳过
+
+        const x1 = x + r * Math.cos(startAngle);
+        const y1 = y + r * Math.sin(startAngle);
+        const x2 = x + r * Math.cos(endAngle);
+        const y2 = y + r * Math.sin(endAngle);
+
+        if (this._currentPath.length === 0) {
+          this._currentPath.push(`M${fmt(x1)},${fmt(y1)}`);
+        }
+
+        const largeArc = Math.abs(diff) > Math.PI ? 1 : 0;
+        const sweep = anticlockwise ? 0 : 1;
+        this._currentPath.push(`A${fmt(r)},${fmt(r)} 0 ${largeArc},${sweep} ${fmt(x2)},${fmt(y2)}`);
+      }
+
+      quadraticCurveTo(cx, cy, x, y) {
+        this._currentPath.push(`Q${fmt(cx)},${fmt(cy)} ${fmt(x)},${fmt(y)}`);
+      }
+
+      stroke() {
+        if (!this._currentPath || this._currentPath.length === 0) return;
+        const d = this._currentPath.join(' ');
+        this.elements.push(`<path d="${d}" stroke="${escAttr(this._strokeStyle)}" stroke-width="${fmt(this._lineWidth)}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`);
+        this._currentPath = null;
+      }
+
+      fill() {
+        if (!this._currentPath || this._currentPath.length === 0) return;
+        const d = this._currentPath.join(' ');
+        this.elements.push(`<path d="${d}" fill="${escAttr(this._fillStyle)}"/>`);
+        this._currentPath = null;
+      }
+
+      scale() {
+        // 由外层 <g transform="scale(...)"> 处理
+      }
+
+      getSVG() {
+        const vb = `0 0 ${this.viewBoxW} ${this.viewBoxH}`;
+        const content = this.elements.join('\n  ');
+        return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${this.width}" height="${this.height}" viewBox="${vb}">\n  ${content}\n</svg>`;
+      }
+    }
+
     // ===== 渲染器 =====
     class JianPuRenderer {
       constructor(canvas, ctx) {
@@ -3589,6 +3741,124 @@
 
         return freq;
       }
+
+      renderSVG(data, options = {}) {
+        const { measures, settings } = data;
+        if (measures.length === 0) {
+          return this.renderEmptySVG(options);
+        }
+
+        const layout = this.computeLayout(data);
+        if (!layout) return this.renderEmptySVG(options);
+        const { lines, lineHasLabel } = layout;
+
+        const A4_WIDTH = 720;
+        const A4_HEIGHT = 1050;
+        const MARGIN_X = 40;
+        const MARGIN_Y = 50;
+
+        const lineHeight = this.config.lineHeight || 67;
+        const labelExtraHeight = 18;
+        const titleHeight = settings.title ? 40 : 0;
+        let totalHeight = MARGIN_Y * 2 + titleHeight + 20;
+        for (let i = 0; i < lines.length; i++) {
+          totalHeight += lineHeight + (lineHasLabel[i] ? labelExtraHeight : 0);
+        }
+
+        const renderScale = options.scale || 1.5;
+        const pageInfo = options.pageInfo || null;
+
+        const pageHeight = (pageInfo && pageInfo.actualHeight) ? pageInfo.actualHeight : (pageInfo ? A4_HEIGHT : Math.max(totalHeight, 400));
+        const svgCtx = new SVGContext(
+          Math.round(A4_WIDTH * renderScale),
+          Math.round(pageHeight * renderScale),
+          A4_WIDTH,
+          pageHeight,
+          renderScale
+        );
+
+        svgCtx.fillStyle = '#ffffff';
+        svgCtx.fillRect(0, 0, A4_WIDTH, pageHeight);
+
+        let y = MARGIN_Y;
+        if (settings.title && (!pageInfo || pageInfo.pageIndex === 0)) {
+          svgCtx.fillStyle = '#1a1a2e';
+          svgCtx.font = `bold 22px "Segoe UI", "PingFang SC", sans-serif`;
+          svgCtx.textAlign = 'center';
+          svgCtx.fillText(settings.title, A4_WIDTH / 2, y);
+          y += 35;
+        }
+
+        if (!pageInfo || pageInfo.pageIndex === 0) {
+          svgCtx.fillStyle = '#555';
+          svgCtx.font = `12px "Segoe UI", "PingFang SC", sans-serif`;
+          svgCtx.textAlign = 'left';
+          const keyText = `${settings.key}大调  ${settings.timeSignature[0]}/${settings.timeSignature[1]}拍  ♩=${settings.bpm}`;
+          svgCtx.fillText(keyText, MARGIN_X, y);
+          y += lineHeight * 0.75;
+        } else {
+          y = MARGIN_Y;
+        }
+
+        let avgMeasureWidth = null;
+        if (lines.length > 1) {
+          let totalWidth = 0;
+          let totalCount = 0;
+          for (let i = 0; i < lines.length - 1; i++) {
+            const line = lines[i];
+            const lineAvailableWidth = A4_WIDTH - MARGIN_X * 2;
+            const perMeasureWidth = lineAvailableWidth / line.length;
+            totalWidth += perMeasureWidth;
+            totalCount += 1;
+          }
+          avgMeasureWidth = totalWidth / totalCount;
+        }
+
+        for (let i = 0; i < lines.length; i++) {
+          if (pageInfo && !pageInfo.lineIndices.includes(i)) continue;
+          const line = lines[i];
+          const isLastLine = (i === lines.length - 1);
+          const useMaxWidth = (isLastLine && avgMeasureWidth !== null && line.length < lines[0].length)
+            ? avgMeasureWidth * 1.2
+            : null;
+          this.renderLine(svgCtx, line, MARGIN_X, y, A4_WIDTH - MARGIN_X * 2, useMaxWidth, settings.timeSignature);
+          y += lineHeight + (lineHasLabel[i] ? labelExtraHeight : 0);
+        }
+
+        if (pageInfo && pageInfo.totalPages > 1) {
+          svgCtx.fillStyle = '#999';
+          svgCtx.font = `11px "Segoe UI", "PingFang SC", sans-serif`;
+          svgCtx.textAlign = 'center';
+          svgCtx.fillText(`— ${pageInfo.pageIndex + 1} / ${pageInfo.totalPages} —`, A4_WIDTH / 2, pageHeight - 20);
+        }
+
+        return svgCtx.getSVG();
+      }
+
+      renderEmptySVG(options = {}) {
+        const A4_WIDTH = 720;
+        const renderScale = options.scale || 1.5;
+
+        const svgCtx = new SVGContext(
+          Math.round(A4_WIDTH * renderScale),
+          Math.round(400 * renderScale),
+          A4_WIDTH,
+          400,
+          renderScale
+        );
+
+        svgCtx.fillStyle = '#ffffff';
+        svgCtx.fillRect(0, 0, A4_WIDTH, 400);
+
+        svgCtx.fillStyle = '#ccc';
+        svgCtx.font = '18px "Segoe UI", "PingFang SC", sans-serif';
+        svgCtx.textAlign = 'center';
+        svgCtx.fillText('🎵 在左侧编辑器输入简谱，此处将实时预览', A4_WIDTH / 2, 200 - 20);
+        svgCtx.font = '14px "Segoe UI", sans-serif';
+        svgCtx.fillText('例如: 1 2 3 4 | 5 6 5 3 | 2 - - - ||', A4_WIDTH / 2, 200 + 20);
+
+        return svgCtx.getSVG();
+      }
     }
 
     // ===== 音频播放器 =====
@@ -3824,10 +4094,11 @@
 
     async function doExport() {
       let scale = parseFloat(exportResolution.value);
+      const format = document.getElementById('exportFormat').value;
 
-      // iOS Safari canvas 宽度检查
+      // iOS Safari canvas 宽度检查（仅 PNG）
       const maxCanvasSize = 4096;
-      if (Math.round(720 * scale) > maxCanvasSize) {
+      if (format === 'png' && Math.round(720 * scale) > maxCanvasSize) {
         scale = Math.floor((maxCanvasSize / 720) * 10) / 10;
       }
 
@@ -3846,11 +4117,17 @@
         status.textContent = '正在导出…';
 
         if (!layout) {
-          const tmp = document.createElement('canvas');
-          canvas = tmp;
-          ctx = tmp.getContext('2d');
-          renderer.renderEmpty({ scale });
-          triggerDownload(tmp.toDataURL('image/png'), `${baseName}_${dateStr}.png`);
+          if (format === 'png') {
+            const tmp = document.createElement('canvas');
+            canvas = tmp;
+            ctx = tmp.getContext('2d');
+            renderer.renderEmpty({ scale });
+            triggerDownload(tmp.toDataURL('image/png'), `${baseName}_${dateStr}.png`);
+          } else {
+            const svgStr = renderer.renderEmptySVG({ scale });
+            const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+            triggerDownload(URL.createObjectURL(blob), `${baseName}_${dateStr}.svg`);
+          }
           status.textContent = '已导出';
           return;
         }
@@ -3883,14 +4160,21 @@
         if (currentPage.lines.length > 0) pages.push(currentPage);
 
         if (pages.length === 1) {
-          const tmp = document.createElement('canvas');
-          canvas = tmp;
-          ctx = tmp.getContext('2d');
-          renderer.render(data, { scale });
-          triggerDownload(tmp.toDataURL('image/png'), `${baseName}_${dateStr}.png`);
-          status.textContent = '已导出 PNG';
+          if (format === 'png') {
+            const tmp = document.createElement('canvas');
+            canvas = tmp;
+            ctx = tmp.getContext('2d');
+            renderer.render(data, { scale });
+            triggerDownload(tmp.toDataURL('image/png'), `${baseName}_${dateStr}.png`);
+            status.textContent = '已导出 PNG';
+          } else {
+            const svgStr = renderer.renderSVG(data, { scale });
+            const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+            triggerDownload(URL.createObjectURL(blob), `${baseName}_${dateStr}.svg`);
+            status.textContent = '已导出 SVG';
+          }
         } else {
-          // 先计算每页高度，检查是否会超限
+          // 先计算每页高度
           const lineH = appConfig.lineHeight || 67;
           const labelExtra = 18;
           const firstPageHeader = (layout.settings.title ? 35 : 0) + Math.round(lineH * 0.75);
@@ -3899,65 +4183,87 @@
             return Math.max(400, 50 + headerH + pg.usedHeight + 50);
           });
 
-          // 检查目标 scale 是否会超限（高度或宽度任一超限都要降级）
-          for (const h of pageHeights) {
-            if (Math.round(720 * scale) > maxCanvasSize || Math.round(h * scale) > maxCanvasSize) {
-              let safeScale = scale;
-              for (const ph of pageHeights) {
-                safeScale = Math.min(safeScale, maxCanvasSize / 720, maxCanvasSize / ph);
+          if (format === 'png') {
+            // 检查目标 scale 是否会超限（高度或宽度任一超限都要降级）
+            for (const h of pageHeights) {
+              if (Math.round(720 * scale) > maxCanvasSize || Math.round(h * scale) > maxCanvasSize) {
+                let safeScale = scale;
+                for (const ph of pageHeights) {
+                  safeScale = Math.min(safeScale, maxCanvasSize / 720, maxCanvasSize / ph);
+                }
+                scale = Math.floor(safeScale * 10) / 10;
+                break;
               }
-              scale = Math.floor(safeScale * 10) / 10;
-              break;
             }
           }
 
           // A4 固定高度 1050，如果 scale 下不超限就用固定 A4（更标准），否则用自适应高度
-          const useFixedA4 = Math.round(1050 * scale) <= maxCanvasSize;
-
-          const tmpContainer = document.createElement('div');
-          tmpContainer.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1;overflow:hidden;';
-          document.body.appendChild(tmpContainer);
+          const useFixedA4 = format === 'png'
+            ? Math.round(1050 * scale) <= maxCanvasSize
+            : true; // SVG 无 canvas 限制，固定用 A4
 
           const zip = new JSZip();
 
-          for (let p = 0; p < pages.length; p++) {
-            const tmp = document.createElement('canvas');
-            tmpContainer.appendChild(tmp);
-            canvas = tmp;
-            ctx = tmp.getContext('2d');
+          if (format === 'png') {
+            const tmpContainer = document.createElement('div');
+            tmpContainer.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1;overflow:hidden;';
+            document.body.appendChild(tmpContainer);
 
-            const pageInfo = {
-              pageIndex: p,
-              lineIndices: pages[p].lines,
-              totalPages: pages.length
-            };
+            for (let p = 0; p < pages.length; p++) {
+              const tmp = document.createElement('canvas');
+              tmpContainer.appendChild(tmp);
+              canvas = tmp;
+              ctx = tmp.getContext('2d');
 
-            if (!useFixedA4) {
-              pageInfo.actualHeight = pageHeights[p];
-            }
+              const pageInfo = {
+                pageIndex: p,
+                lineIndices: pages[p].lines,
+                totalPages: pages.length
+              };
 
-            renderer.render(data, { scale, pageInfo });
-
-            let blob = await new Promise(resolve => tmp.toBlob(resolve, 'image/png'));
-            if (!blob || blob.size < 100) {
-              const dataUrl = tmp.toDataURL('image/png');
-              const base64 = dataUrl.split(',')[1];
-              if (!base64 || base64.length < 100) {
-                throw new Error(`第 ${p + 1} 页 canvas 无内容`);
+              if (!useFixedA4) {
+                pageInfo.actualHeight = pageHeights[p];
               }
-              const binaryStr = atob(base64);
-              const bytes = new Uint8Array(binaryStr.length);
-              for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-              blob = bytes;
+
+              renderer.render(data, { scale, pageInfo });
+
+              let blob = await new Promise(resolve => tmp.toBlob(resolve, 'image/png'));
+              if (!blob || blob.size < 100) {
+                const dataUrl = tmp.toDataURL('image/png');
+                const base64 = dataUrl.split(',')[1];
+                if (!base64 || base64.length < 100) {
+                  throw new Error(`第 ${p + 1} 页 canvas 无内容`);
+                }
+                const binaryStr = atob(base64);
+                const bytes = new Uint8Array(binaryStr.length);
+                for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+                blob = bytes;
+              }
+
+              if (tmp.parentNode) tmp.parentNode.removeChild(tmp);
+              zip.file(`第${p + 1}页.png`, blob);
+              status.textContent = `正在导出第 ${p + 1}/${pages.length} 页…`;
+              await new Promise(r => setTimeout(r, 0));
             }
 
-            if (tmp.parentNode) tmp.parentNode.removeChild(tmp);
-            zip.file(`第${p + 1}页.png`, blob);
-            status.textContent = `正在导出第 ${p + 1}/${pages.length} 页…`;
-            await new Promise(r => setTimeout(r, 0));
+            if (tmpContainer.parentNode) tmpContainer.parentNode.removeChild(tmpContainer);
+          } else {
+            for (let p = 0; p < pages.length; p++) {
+              const pageInfo = {
+                pageIndex: p,
+                lineIndices: pages[p].lines,
+                totalPages: pages.length
+              };
+              if (!useFixedA4) {
+                pageInfo.actualHeight = pageHeights[p];
+              }
+              const svgStr = renderer.renderSVG(data, { scale, pageInfo });
+              const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+              zip.file(`第${p + 1}页.svg`, blob);
+              status.textContent = `正在导出第 ${p + 1}/${pages.length} 页…`;
+              await new Promise(r => setTimeout(r, 0));
+            }
           }
-
-          if (tmpContainer.parentNode) tmpContainer.parentNode.removeChild(tmpContainer);
 
           status.textContent = '正在生成 ZIP…';
           const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -4262,7 +4568,9 @@
     // 导出对话框初始化（DOM 已就绪后绑定）
     function initExportModal() {
       const exportModal = document.getElementById('exportModal');
+      const exportFormat = document.getElementById('exportFormat');
       const exportResolution = document.getElementById('exportResolution');
+      const resolutionLabel = document.getElementById('resolutionLabel');
       const exportHint = document.getElementById('exportHint');
       const btnCancelExport = document.getElementById('btnCancelExport');
       const btnConfirmExport = document.getElementById('btnConfirmExport');
@@ -4275,12 +4583,22 @@
       };
 
       function updateExportHint() {
+        const fmt = exportFormat.value;
+        if (fmt === 'svg') {
+          exportHint.innerHTML = '<strong>SVG 矢量图</strong>：无限缩放不失真，文件极小，<br>打印效果最佳，推荐用于印刷排版。';
+          resolutionLabel.style.display = 'none';
+          exportResolution.style.display = 'none';
+          return;
+        }
+        resolutionLabel.style.display = '';
+        exportResolution.style.display = '';
         const val = exportResolution.value;
         const info = RESOLUTION_HINTS[val];
         if (info) {
           exportHint.innerHTML = `<strong>${info.label}</strong>：${info.size}，${info.file}<br>${info.desc}`;
         }
       }
+      exportFormat.addEventListener('change', updateExportHint);
       exportResolution.addEventListener('change', updateExportHint);
       updateExportHint();
 
@@ -4408,7 +4726,12 @@
     <div class="modal">
       <div class="modal-title">📥 导出乐谱图片</div>
       <div class="modal-body">
-        <div class="modal-label">选择分辨率</div>
+        <div class="modal-label">导出格式</div>
+        <select class="modal-select" id="exportFormat">
+          <option value="png">PNG 位图（兼容性好）</option>
+          <option value="svg">SVG 矢量（打印更清晰）</option>
+        </select>
+        <div class="modal-label" id="resolutionLabel" style="margin-top:12px;">选择分辨率</div>
         <select class="modal-select" id="exportResolution">
           <option value="1.5" data-label="屏幕浏览">屏幕浏览（130 DPI，适合分享）</option>
           <option value="3.5" data-label="高清打印" selected>高清打印（300 DPI，A4标准）</option>
