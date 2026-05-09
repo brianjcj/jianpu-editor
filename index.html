@@ -2122,12 +2122,9 @@
     }
 
     class SVGContext {
-      constructor(width, height, viewBoxW, viewBoxH, scale) {
-        this.width = width;
-        this.height = height;
+      constructor(viewBoxW, viewBoxH) {
         this.viewBoxW = viewBoxW;
         this.viewBoxH = viewBoxH;
-        this.scale = scale;
         this.elements = [];
         this._fillStyle = '#000';
         this._strokeStyle = '#000';
@@ -2227,14 +2224,13 @@
         this._currentPath = null;
       }
 
-      scale() {
-        // 由外层 <g transform="scale(...)"> 处理
-      }
-
       getSVG() {
         const vb = `0 0 ${this.viewBoxW} ${this.viewBoxH}`;
         const content = this.elements.join('\n  ');
-        return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${this.width}" height="${this.height}" viewBox="${vb}">\n  ${content}\n</svg>`;
+        // 物理尺寸固定为 A4 宽度 210mm，高度按 viewBox 比例
+        const widthMm = 210;
+        const heightMm = (this.viewBoxH / this.viewBoxW) * widthMm;
+        return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${widthMm}mm" height="${heightMm}mm" viewBox="${vb}">\n  ${content}\n</svg>`;
       }
     }
 
@@ -3769,13 +3765,7 @@
         const pageInfo = options.pageInfo || null;
 
         const pageHeight = (pageInfo && pageInfo.actualHeight) ? pageInfo.actualHeight : (pageInfo ? A4_HEIGHT : Math.max(totalHeight, 400));
-        const svgCtx = new SVGContext(
-          Math.round(A4_WIDTH * renderScale),
-          Math.round(pageHeight * renderScale),
-          A4_WIDTH,
-          pageHeight,
-          renderScale
-        );
+        const svgCtx = new SVGContext(A4_WIDTH, pageHeight);
 
         svgCtx.fillStyle = '#ffffff';
         svgCtx.fillRect(0, 0, A4_WIDTH, pageHeight);
@@ -3839,13 +3829,7 @@
         const A4_WIDTH = 720;
         const renderScale = options.scale || 1.5;
 
-        const svgCtx = new SVGContext(
-          Math.round(A4_WIDTH * renderScale),
-          Math.round(400 * renderScale),
-          A4_WIDTH,
-          400,
-          renderScale
-        );
+        const svgCtx = new SVGContext(A4_WIDTH, 400);
 
         svgCtx.fillStyle = '#ffffff';
         svgCtx.fillRect(0, 0, A4_WIDTH, 400);
