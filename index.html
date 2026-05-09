@@ -4281,6 +4281,32 @@
       });
 
       // 确定
+      // 恢复默认
+      document.getElementById('btnResetSettings').addEventListener('click', () => {
+        appConfig.lineHeight = 67;
+        appConfig.enableMaxMeasures = false;
+        appConfig.maxMeasuresPerLine = null;
+
+        lineHeightSlider.value = 67;
+        lineHeightValue.textContent = '67px';
+        enableMaxMeasures.checked = false;
+        maxMeasuresSlider.value = 4;
+        maxMeasuresSlider.disabled = true;
+        maxMeasuresValue.textContent = '自动';
+
+        localStorage.setItem('jianpu_editor_settings', JSON.stringify({
+          lineHeight: appConfig.lineHeight,
+          enableMaxMeasures: appConfig.enableMaxMeasures,
+          maxMeasuresPerLine: appConfig.maxMeasuresPerLine
+        }));
+
+        applySettingsToRenderer();
+        render();
+
+        status.textContent = '已恢复默认设置';
+        setTimeout(() => { if (status.textContent === '已恢复默认设置') status.textContent = '就绪'; }, 2000);
+      });
+
       btnConfirmSettings.addEventListener('click', () => {
         appConfig.lineHeight = parseInt(lineHeightSlider.value);
         appConfig.enableMaxMeasures = enableMaxMeasures.checked;
@@ -4351,6 +4377,7 @@
         </div>
       </div>
       <div class="modal-actions">
+        <button class="modal-btn modal-btn-secondary" id="btnResetSettings" style="margin-right:auto;">恢复默认</button>
         <button class="modal-btn modal-btn-secondary" id="btnCancelSettings">取消</button>
         <button class="modal-btn modal-btn-primary" id="btnConfirmSettings">确定</button>
       </div>
