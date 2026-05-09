@@ -3852,6 +3852,8 @@
         this.currentSources = [];
         this.masterGain = null;
         this.volume = 0.7;
+        this.totalDuration = 0;
+        this._cleanupTimer = null;
       }
 
       initAudio() {
@@ -3859,6 +3861,12 @@
           this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
           this.masterGain = this.audioCtx.createGain();
           this.masterGain.connect(this.audioCtx.destination);
+          // 监听状态变化，自动恢复被挂起的 AudioContext
+          this.audioCtx.onstatechange = () => {
+            if (this.audioCtx && this.audioCtx.state !== 'running' && this.isPlaying) {
+              this.audioCtx.resume().catch(() => {});
+            }
+          };
         }
         if (this.audioCtx.state === 'suspended') {
           this.audioCtx.resume();
@@ -3874,6 +3882,7 @@
 
         const now = this.audioCtx.currentTime;
         this.isPlaying = true;
+        this.totalDuration = totalDuration;
         state.playbackStartTime = now;
         state.isPlaying = true;
 
@@ -3892,13 +3901,23 @@
           const startTime = now + note.startTime;
           const endTime = startTime + note.duration;
 
+          // 节点结束后自动清理引用，防止长曲堆积
+          const sourceRef = { osc, gain };
+          const removeSelf = () => {
+            try { osc.disconnect(); } catch (e) {}
+            try { gain.disconnect(); } catch (e) {}
+            const idx = this.currentSources.indexOf(sourceRef);
+            if (idx !== -1) this.currentSources.splice(idx, 1);
+          };
+          osc.onended = removeSelf;
+
           if (note.isBeat) {
             // 鼓点：用三角波模拟打击乐，短促有力
             osc.type = 'triangle';
             osc.frequency.value = 120;
             gain.gain.setValueAtTime(0, startTime);
             gain.gain.linearRampToValueAtTime(0.6 * this.volume, startTime + 0.005); // 极快 Attack
-            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.08); // 快速衰减
+            gain.gain.linearRampToValueAtTime(0, startTime + 0.08); // 快速衰减
             osc.start(startTime);
             osc.stop(startTime + 0.1);
           } else {
@@ -3915,54 +3934,60 @@
             gain.gain.setValueAtTime(0, startTime);
             gain.gain.linearRampToValueAtTime(0.7 * this.volume, startTime + 0.02); // Attack
             gain.gain.setValueAtTime(0.7 * this.volume, endTime - 0.05); // Sustain
-            gain.gain.exponentialRampToValueAtTime(0.001, endTime); // Release
+            gain.gain.linearRampToValueAtTime(0, endTime); // Release
 
             osc.start(startTime);
             // 让增益节点控制结束，振荡器多留一点尾巴
             osc.stop(endTime + 0.02);
           }
 
-          this.currentSources.push({ osc, gain });
+          this.currentSources.push(sourceRef);
         }
 
-        // 进度更新
+        // 进度更新（由 RAF 轮询驱动，自然结束时自动停止）
         this.updateProgress(totalDuration);
-
-        // 播放结束自动停止
-        setTimeout(() => {
-          this.stop();
-          // 恢复播放按钮 UI
-          const btnPlay = document.getElementById('btnPlay');
-          if (btnPlay) {
-            btnPlay.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> 播放';
-            btnPlay.classList.remove('btn-active');
-          }
-        }, totalDuration * 1000 + 200);
       }
 
       updateProgress(totalDuration) {
         const progressBar = document.getElementById('playbackProgress');
         const update = () => {
-          if (!this.isPlaying) return;
+          if (!this.isPlaying || !this.audioCtx) return;
           const elapsed = this.audioCtx.currentTime - state.playbackStartTime;
           const progress = Math.min((elapsed / totalDuration) * 100, 100);
           progressBar.style.width = progress + '%';
 
-          if (progress < 100) {
-            requestAnimationFrame(update);
+          if (progress >= 100) {
+            this.stop();
+            this._resetPlayButton();
+            return;
           }
+          requestAnimationFrame(update);
         };
         requestAnimationFrame(update);
+      }
+
+      _resetPlayButton() {
+        const btnPlay = document.getElementById('btnPlay');
+        if (btnPlay) {
+          btnPlay.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> 播放';
+          btnPlay.classList.remove('btn-active');
+        }
       }
 
       stop(immediate = false) {
         this.isPlaying = false;
         state.isPlaying = false;
 
+        if (this._cleanupTimer) {
+          clearTimeout(this._cleanupTimer);
+          this._cleanupTimer = null;
+        }
+
         if (immediate) {
           // 立即强制停止（play() 开头调用，清理旧资源）
           for (const source of this.currentSources) {
             try {
+              source.osc.onended = null;
               source.osc.stop();
               source.osc.disconnect();
               source.gain.disconnect();
@@ -3970,21 +3995,22 @@
           }
           this.currentSources = [];
         } else {
-          // 用户手动停止：平滑淡出
+          // 用户手动停止或自然结束：平滑淡出
           const now = this.audioCtx ? this.audioCtx.currentTime : 0;
 
           for (const source of this.currentSources) {
             try {
+              source.osc.onended = null;
               const gain = source.gain;
               gain.gain.cancelScheduledValues(now);
               gain.gain.setValueAtTime(gain.gain.value || 0.001, now);
-              gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+              gain.gain.linearRampToValueAtTime(0, now + 0.05);
               source.osc.stop(now + 0.06);
             } catch (e) {}
           }
 
           // 延迟清理
-          setTimeout(() => {
+          this._cleanupTimer = setTimeout(() => {
             for (const source of this.currentSources) {
               try {
                 source.osc.disconnect();
@@ -3992,7 +4018,7 @@
               } catch (e) {}
             }
             this.currentSources = [];
-          }, 100);
+          }, 120);
         }
 
         document.getElementById('playbackBar').style.display = 'none';
