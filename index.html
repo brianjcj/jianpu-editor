@@ -2139,24 +2139,20 @@
         const renderScale = options.scale || 1.5;
         const pageInfo = options.pageInfo || null;
 
-        if (pageInfo) {
-          canvas.width = A4_WIDTH * renderScale;
-          canvas.height = A4_HEIGHT * renderScale;
-        } else {
-          canvas.width = A4_WIDTH * renderScale;
-          canvas.height = Math.max(totalHeight, 400) * renderScale;
+        const pageHeight = (pageInfo && pageInfo.actualHeight) ? pageInfo.actualHeight : (pageInfo ? A4_HEIGHT : Math.max(totalHeight, 400));
+        canvas.width = Math.round(A4_WIDTH * renderScale);
+        canvas.height = Math.round(pageHeight * renderScale);
+        if (!pageInfo) {
           canvas.style.width = '100%';
           canvas.style.maxWidth = A4_WIDTH + 'px';
           canvas.style.height = 'auto';
         }
+        // 设置 width/height 会重置 canvas 上下文，必须重新获取 ctx
+        ctx = canvas.getContext('2d');
         ctx.scale(renderScale, renderScale);
 
         ctx.fillStyle = '#ffffff';
-        if (pageInfo) {
-          ctx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT);
-        } else {
-          ctx.fillRect(0, 0, A4_WIDTH, Math.max(totalHeight, 400));
-        }
+        ctx.fillRect(0, 0, A4_WIDTH, pageHeight);
 
         let y = MARGIN_Y;
         if (settings.title && (!pageInfo || pageInfo.pageIndex === 0)) {
@@ -2201,6 +2197,14 @@
             : null;
           this.renderLine(ctx, line, MARGIN_X, y, A4_WIDTH - MARGIN_X * 2, useMaxWidth, settings.timeSignature);
           y += lineHeight + (lineHasLabel[i] ? labelExtraHeight : 0);
+        }
+
+        // 页码
+        if (pageInfo && pageInfo.totalPages > 1) {
+          ctx.fillStyle = '#999';
+          ctx.font = `11px "Segoe UI", "PingFang SC", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillText(`— ${pageInfo.pageIndex + 1} / ${pageInfo.totalPages} —`, A4_WIDTH / 2, pageHeight - 20);
         }
 
         state.bpm = settings.bpm;
@@ -3263,11 +3267,13 @@
         const A4_WIDTH = 720;
         const renderScale = options.scale || 1.5;
 
-        canvas.width = A4_WIDTH * renderScale;
-        canvas.height = 400 * renderScale;
+        canvas.width = Math.round(A4_WIDTH * renderScale);
+        canvas.height = Math.round(400 * renderScale);
         canvas.style.width = '100%';
         canvas.style.maxWidth = A4_WIDTH + 'px';
         canvas.style.height = 'auto';
+        // 设置 width/height 会重置 canvas 上下文，必须重新获取 ctx
+        ctx = canvas.getContext('2d');
         ctx.scale(renderScale, renderScale);
 
         ctx.fillStyle = '#ffffff';
@@ -3803,8 +3809,28 @@
       window.print();
     });
 
+    // 兼容 iOS Safari / 老浏览器的下载触发
+    function triggerDownload(url, filename) {
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      // 延迟移除，避免打断浏览器下载请求
+      setTimeout(() => {
+        if (link.parentNode) link.parentNode.removeChild(link);
+      }, 1000);
+    }
+
     async function doExport() {
-      const scale = parseFloat(exportResolution.value);
+      let scale = parseFloat(exportResolution.value);
+
+      // iOS Safari canvas 宽度检查
+      const maxCanvasSize = 4096;
+      if (Math.round(720 * scale) > maxCanvasSize) {
+        scale = Math.floor((maxCanvasSize / 720) * 10) / 10;
+      }
+
       const text = editor.value;
       const data = parser.parse(text);
       const layout = renderer.computeLayout(data);
@@ -3820,22 +3846,18 @@
         status.textContent = '正在导出…';
 
         if (!layout) {
-          // 空乐谱
           const tmp = document.createElement('canvas');
           canvas = tmp;
           ctx = tmp.getContext('2d');
           renderer.renderEmpty({ scale });
-          const link = document.createElement('a');
-          link.download = `${baseName}_${dateStr}.png`;
-          link.href = tmp.toDataURL('image/png');
-          link.click();
+          triggerDownload(tmp.toDataURL('image/png'), `${baseName}_${dateStr}.png`);
           status.textContent = '已导出';
           return;
         }
 
         const A4_HEIGHT = 1050;
         const MARGIN_Y = 50;
-        const titleHeader = (layout.settings.title ? 40 : 0) + 50; // 标题 + 调号高度
+        const titleHeader = (layout.settings.title ? 40 : 0) + 50;
         const firstPageAvailable = A4_HEIGHT - MARGIN_Y - MARGIN_Y - titleHeader;
         const otherPageAvailable = A4_HEIGHT - MARGIN_Y - MARGIN_Y;
 
@@ -3846,7 +3868,6 @@
         for (let i = 0; i < layout.lines.length; i++) {
           const h = layout.lineHeights[i];
           const available = isFirstPage ? firstPageAvailable : otherPageAvailable;
-
           if (currentPage.lines.length === 0) {
             currentPage.lines.push(i);
             currentPage.usedHeight = h;
@@ -3862,45 +3883,94 @@
         if (currentPage.lines.length > 0) pages.push(currentPage);
 
         if (pages.length === 1) {
-          // 单页：直接导出 PNG
           const tmp = document.createElement('canvas');
           canvas = tmp;
           ctx = tmp.getContext('2d');
           renderer.render(data, { scale });
-
-          const link = document.createElement('a');
-          link.download = `${baseName}_${dateStr}.png`;
-          link.href = tmp.toDataURL('image/png');
-          link.click();
+          triggerDownload(tmp.toDataURL('image/png'), `${baseName}_${dateStr}.png`);
           status.textContent = '已导出 PNG';
         } else {
-          // 多页：打包 ZIP
+          // 先计算每页高度，检查是否会超限
+          const lineH = appConfig.lineHeight || 67;
+          const labelExtra = 18;
+          const firstPageHeader = (layout.settings.title ? 35 : 0) + Math.round(lineH * 0.75);
+          const pageHeights = pages.map((pg, idx) => {
+            const headerH = idx === 0 ? firstPageHeader : 0;
+            return Math.max(400, 50 + headerH + pg.usedHeight + 50);
+          });
+
+          // 检查目标 scale 是否会超限（高度或宽度任一超限都要降级）
+          for (const h of pageHeights) {
+            if (Math.round(720 * scale) > maxCanvasSize || Math.round(h * scale) > maxCanvasSize) {
+              let safeScale = scale;
+              for (const ph of pageHeights) {
+                safeScale = Math.min(safeScale, maxCanvasSize / 720, maxCanvasSize / ph);
+              }
+              scale = Math.floor(safeScale * 10) / 10;
+              break;
+            }
+          }
+
+          // A4 固定高度 1050，如果 scale 下不超限就用固定 A4（更标准），否则用自适应高度
+          const useFixedA4 = Math.round(1050 * scale) <= maxCanvasSize;
+
+          const tmpContainer = document.createElement('div');
+          tmpContainer.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1;overflow:hidden;';
+          document.body.appendChild(tmpContainer);
+
           const zip = new JSZip();
-          const folder = zip.folder(baseName);
 
           for (let p = 0; p < pages.length; p++) {
             const tmp = document.createElement('canvas');
+            tmpContainer.appendChild(tmp);
             canvas = tmp;
             ctx = tmp.getContext('2d');
-            renderer.render(data, {
-              scale,
-              pageInfo: { pageIndex: p, lineIndices: pages[p].lines }
-            });
 
-            const blob = await new Promise(resolve => tmp.toBlob(resolve, 'image/png'));
-            folder.file(`第${p + 1}页.png`, blob);
+            const pageInfo = {
+              pageIndex: p,
+              lineIndices: pages[p].lines,
+              totalPages: pages.length
+            };
+
+            if (!useFixedA4) {
+              pageInfo.actualHeight = pageHeights[p];
+            }
+
+            renderer.render(data, { scale, pageInfo });
+
+            let blob = await new Promise(resolve => tmp.toBlob(resolve, 'image/png'));
+            if (!blob || blob.size < 100) {
+              const dataUrl = tmp.toDataURL('image/png');
+              const base64 = dataUrl.split(',')[1];
+              if (!base64 || base64.length < 100) {
+                throw new Error(`第 ${p + 1} 页 canvas 无内容`);
+              }
+              const binaryStr = atob(base64);
+              const bytes = new Uint8Array(binaryStr.length);
+              for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+              blob = bytes;
+            }
+
+            if (tmp.parentNode) tmp.parentNode.removeChild(tmp);
+            zip.file(`第${p + 1}页.png`, blob);
+            status.textContent = `正在导出第 ${p + 1}/${pages.length} 页…`;
+            await new Promise(r => setTimeout(r, 0));
           }
 
+          if (tmpContainer.parentNode) tmpContainer.parentNode.removeChild(tmpContainer);
+
+          status.textContent = '正在生成 ZIP…';
           const zipBlob = await zip.generateAsync({ type: 'blob' });
-          const link = document.createElement('a');
-          link.download = `${baseName}_${dateStr}.zip`;
-          link.href = URL.createObjectURL(zipBlob);
-          link.click();
+          const blobUrl = URL.createObjectURL(zipBlob);
+          triggerDownload(blobUrl, `${baseName}_${dateStr}.zip`);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
           status.textContent = `已导出 ${pages.length} 页 ZIP`;
         }
       } catch (err) {
         console.error(err);
-        status.textContent = '导出失败：' + err.message;
+        const msg = '导出失败：' + (err && err.message ? err.message : String(err));
+        status.textContent = msg;
+        alert(msg);
       } finally {
         canvas = origCanvas;
         ctx = origCtx;
