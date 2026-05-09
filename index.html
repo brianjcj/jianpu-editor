@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <title>简谱编辑器 — JianPu Editor</title>
   <style>
     /* ===== CSS Variables - Material Design 3 Theme ===== */
@@ -3854,6 +3855,15 @@
         this.volume = 0.7;
         this.totalDuration = 0;
         this._cleanupTimer = null;
+        // 隐藏音频元素，用于维持 iOS 后台媒体会话，防止熄屏后 AudioContext 被挂起
+        this.silentAudio = new Audio();
+        this.silentAudio.loop = true;
+        this.silentAudio.playsInline = true;
+        this.silentAudio.setAttribute('playsinline', '');
+        this.streamDest = null;
+        // 用于后台保持的独立振荡器（避免与主音频混合产生杂音）
+        this.keeperOsc = null;
+        this.keeperGain = null;
       }
 
       initAudio() {
@@ -3861,12 +3871,20 @@
           this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
           this.masterGain = this.audioCtx.createGain();
           this.masterGain.connect(this.audioCtx.destination);
+          // 创建 MediaStreamDestination，后续用一个独立弱信号维持 iOS 后台播放
+          if (this.audioCtx.createMediaStreamDestination) {
+            this.streamDest = this.audioCtx.createMediaStreamDestination();
+          }
           // 监听状态变化，自动恢复被挂起的 AudioContext
           this.audioCtx.onstatechange = () => {
             if (this.audioCtx && this.audioCtx.state !== 'running' && this.isPlaying) {
               this.audioCtx.resume().catch(() => {});
             }
           };
+        }
+        // 将隐藏 audio 元素绑定到媒体流（必须在用户交互后执行）
+        if (this.streamDest && !this.silentAudio.srcObject) {
+          this.silentAudio.srcObject = this.streamDest.stream;
         }
         if (this.audioCtx.state === 'suspended') {
           this.audioCtx.resume();
@@ -3944,6 +3962,27 @@
           this.currentSources.push(sourceRef);
         }
 
+        // 启动一个独立且极弱的振荡器喂给 MediaStream，维持 iOS 后台媒体会话
+        // 主音频图不再连接 streamDest，避免双重输出导致音质变差/杂音
+        if (this.streamDest) {
+          this.keeperOsc = this.audioCtx.createOscillator();
+          this.keeperGain = this.audioCtx.createGain();
+          this.keeperOsc.frequency.value = 1; // 1Hz，远低于人耳下限，基本不可闻
+          this.keeperGain.gain.value = 0.0001; // -80dB，极微弱
+          this.keeperOsc.connect(this.keeperGain);
+          this.keeperGain.connect(this.streamDest);
+          this.keeperOsc.start();
+          this.silentAudio.play().catch(() => {});
+        }
+        // 设置锁屏媒体信息
+        if ('mediaSession' in navigator) {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: '简谱播放中',
+            artist: '简谱编辑器',
+            album: ''
+          });
+        }
+
         // 进度更新（由 RAF 轮询驱动，自然结束时自动停止）
         this.updateProgress(totalDuration);
       }
@@ -4019,6 +4058,23 @@
             }
             this.currentSources = [];
           }, 120);
+        }
+
+        // 停止 keeper 振荡器并清理
+        if (this.keeperOsc) {
+          try { this.keeperOsc.stop(); } catch (e) {}
+          try { this.keeperOsc.disconnect(); } catch (e) {}
+          this.keeperOsc = null;
+        }
+        if (this.keeperGain) {
+          try { this.keeperGain.disconnect(); } catch (e) {}
+          this.keeperGain = null;
+        }
+        // 暂停隐藏音频，释放后台媒体会话
+        this.silentAudio.pause();
+        this.silentAudio.currentTime = 0;
+        if ('mediaSession' in navigator) {
+          navigator.mediaSession.metadata = null;
         }
 
         document.getElementById('playbackBar').style.display = 'none';
