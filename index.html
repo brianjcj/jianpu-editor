@@ -905,7 +905,109 @@
     ::-webkit-scrollbar-thumb:hover {
       background: var(--text-muted);
     }
+
+    /* ===== 导出对话框 ===== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      backdrop-filter: blur(4px);
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+    .modal {
+      background: var(--surface);
+      border-radius: 16px;
+      box-shadow: var(--shadow-3);
+      width: 90%;
+      max-width: 420px;
+      padding: 24px;
+      animation: modalIn 0.2s ease;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    .modal-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .modal-body {
+      margin-bottom: 20px;
+    }
+    .modal-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .modal-select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid var(--outline);
+      border-radius: 10px;
+      font-size: 14px;
+      background: var(--bg);
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .modal-select:focus {
+      border-color: var(--primary);
+    }
+    .modal-hint {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .modal-hint strong {
+      color: var(--text-primary);
+    }
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+    .modal-btn {
+      padding: 9px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+    }
+    .modal-btn-secondary {
+      background: var(--surface-variant);
+      color: var(--text-primary);
+    }
+    .modal-btn-secondary:hover {
+      background: var(--outline);
+    }
+    .modal-btn-primary {
+      background: var(--primary);
+      color: var(--on-primary);
+    }
+    .modal-btn-primary:hover {
+      background: #4f46e5;
+    }
+    .modal-btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
     <!-- Header -->
@@ -1154,8 +1256,8 @@
 
     // ===== DOM 引用 =====
     const editor = document.getElementById('editor');
-    const canvas = document.getElementById('jianpuCanvas');
-    const ctx = canvas.getContext('2d');
+    let canvas = document.getElementById('jianpuCanvas');
+    let ctx = canvas.getContext('2d');
     const status = document.getElementById('status');
     const canvasContainer = document.getElementById('canvasContainer');
 
@@ -1925,34 +2027,27 @@
         };
       }
 
-      render(data) {
+      render(data, options = {}) {
         const { measures, flatMeasures, settings } = data;
         if (measures.length === 0) {
-          this.renderEmpty();
+          this.renderEmpty(options);
           return;
         }
 
-        // A4 纸尺寸: 210mm x 297mm
-        // 打印分辨率 96 DPI: 794 x 1123 pixels
-        // 留边距后可用宽度约 720px
         const A4_WIDTH = 720;
         const A4_HEIGHT = 1050;
         const MARGIN_X = 40;
         const MARGIN_Y = 50;
 
-        // 根据时值单位计算每行最多容纳多少（一个四分音符=1单位）
-        // 默认4/4拍，每行最多放4个小节（16拍）比较合理
         const beatsPerLine = 16;
         const lines = this.layoutMeasures(measures, beatsPerLine);
 
-        // 检测每行是否有标注
         const lineHasLabel = lines.map(lineMeasures =>
           lineMeasures.some(measure =>
             measure.notes.some(note => note.note)
           )
         );
 
-        // 计算总高度
         const lineHeight = 67;
         const labelExtraHeight = 18;
         const titleHeight = settings.title ? 40 : 0;
@@ -1961,22 +2056,30 @@
           totalHeight += lineHeight + (lineHasLabel[i] ? labelExtraHeight : 0);
         }
 
-        // 设置 canvas 尺寸 - 使用 A4 比例
-        const scale = 1.5; // 高清渲染
-        canvas.width = A4_WIDTH * scale;
-        canvas.height = Math.max(totalHeight, 400) * scale;
-        canvas.style.width = '100%';
-        canvas.style.maxWidth = A4_WIDTH + 'px';
-        canvas.style.height = 'auto';
-        ctx.scale(scale, scale);
+        const renderScale = options.scale || 1.5;
+        const pageInfo = options.pageInfo || null;
 
-        // 背景
+        if (pageInfo) {
+          canvas.width = A4_WIDTH * renderScale;
+          canvas.height = A4_HEIGHT * renderScale;
+        } else {
+          canvas.width = A4_WIDTH * renderScale;
+          canvas.height = Math.max(totalHeight, 400) * renderScale;
+          canvas.style.width = '100%';
+          canvas.style.maxWidth = A4_WIDTH + 'px';
+          canvas.style.height = 'auto';
+        }
+        ctx.scale(renderScale, renderScale);
+
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, A4_WIDTH, Math.max(totalHeight, 400));
+        if (pageInfo) {
+          ctx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT);
+        } else {
+          ctx.fillRect(0, 0, A4_WIDTH, Math.max(totalHeight, 400));
+        }
 
-        // 标题
         let y = MARGIN_Y;
-        if (settings.title) {
+        if (settings.title && (!pageInfo || pageInfo.pageIndex === 0)) {
           ctx.fillStyle = '#1a1a2e';
           ctx.font = `bold 22px "Segoe UI", "PingFang SC", sans-serif`;
           ctx.textAlign = 'center';
@@ -1984,15 +2087,17 @@
           y += 35;
         }
 
-        // 调号拍号
-        ctx.fillStyle = '#555';
-        ctx.font = `12px "Segoe UI", "PingFang SC", sans-serif`;
-        ctx.textAlign = 'left';
-        const keyText = `${settings.key}大调  ${settings.timeSignature[0]}/${settings.timeSignature[1]}拍  ♩=${settings.bpm}`;
-        ctx.fillText(keyText, MARGIN_X, y);
-        y += lineHeight * 0.75;
+        if (!pageInfo || pageInfo.pageIndex === 0) {
+          ctx.fillStyle = '#555';
+          ctx.font = `12px "Segoe UI", "PingFang SC", sans-serif`;
+          ctx.textAlign = 'left';
+          const keyText = `${settings.key}大调  ${settings.timeSignature[0]}/${settings.timeSignature[1]}拍  ♩=${settings.bpm}`;
+          ctx.fillText(keyText, MARGIN_X, y);
+          y += lineHeight * 0.75;
+        } else {
+          y = MARGIN_Y;
+        }
 
-        // 先计算前面行的平均小节宽度，作为最后一行的限制
         let avgMeasureWidth = null;
         if (lines.length > 1) {
           let totalWidth = 0;
@@ -2007,10 +2112,9 @@
           avgMeasureWidth = totalWidth / totalCount;
         }
 
-        // 渲染每行
         for (let i = 0; i < lines.length; i++) {
+          if (pageInfo && !pageInfo.lineIndices.includes(i)) continue;
           const line = lines[i];
-          // 最后一行（小节数明显少于前面的行）限制最大小节宽度，不必强行对齐
           const isLastLine = (i === lines.length - 1);
           const useMaxWidth = (isLastLine && avgMeasureWidth !== null && line.length < lines[0].length)
             ? avgMeasureWidth * 1.2
@@ -2019,13 +2123,40 @@
           y += lineHeight + (lineHasLabel[i] ? labelExtraHeight : 0);
         }
 
-        // 存储设置供播放使用
         state.bpm = settings.bpm;
         state.key = settings.key;
         state.timeSignature = settings.timeSignature;
-
-        // 收集可播放的音符（使用展开后的反复序列）
         this.collectPlaybackNotes(flatMeasures || measures, settings);
+      }
+
+      computeLayout(data) {
+        const { measures, settings } = data;
+        if (measures.length === 0) return null;
+
+        const A4_WIDTH = 720;
+        const MARGIN_X = 40;
+        const MARGIN_Y = 50;
+        const beatsPerLine = 16;
+        const lines = this.layoutMeasures(measures, beatsPerLine);
+
+        const lineHasLabel = lines.map(lineMeasures =>
+          lineMeasures.some(measure =>
+            measure.notes.some(note => note.note)
+          )
+        );
+
+        const lineHeight = 67;
+        const labelExtraHeight = 18;
+        const titleHeight = settings.title ? 40 : 0;
+        let totalHeight = MARGIN_Y * 2 + titleHeight + 20;
+        const lineHeights = [];
+        for (let i = 0; i < lines.length; i++) {
+          const h = lineHeight + (lineHasLabel[i] ? labelExtraHeight : 0);
+          lineHeights.push(h);
+          totalHeight += h;
+        }
+
+        return { measures, settings, lines, lineHasLabel, totalHeight, lineHeights };
       }
 
       layoutMeasures(measures, maxPerLine) {
@@ -3027,16 +3158,16 @@
         }
       }
 
-      renderEmpty() {
+      renderEmpty(options = {}) {
         const A4_WIDTH = 720;
-        const scale = 1.5;
+        const renderScale = options.scale || 1.5;
 
-        canvas.width = A4_WIDTH * scale;
-        canvas.height = 400 * scale;
+        canvas.width = A4_WIDTH * renderScale;
+        canvas.height = 400 * renderScale;
         canvas.style.width = '100%';
         canvas.style.maxWidth = A4_WIDTH + 'px';
         canvas.style.height = 'auto';
-        ctx.scale(scale, scale);
+        ctx.scale(renderScale, renderScale);
 
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, A4_WIDTH, 400);
@@ -3571,15 +3702,113 @@
       window.print();
     });
 
-    // 导出PNG
-    document.getElementById('btnExport').addEventListener('click', () => {
-      const link = document.createElement('a');
-      link.download = 'jianpu_' + new Date().toISOString().slice(0, 10) + '.png';
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-      status.textContent = '已导出PNG';
-      setTimeout(() => status.textContent = '就绪', 2000);
-    });
+    async function doExport() {
+      const scale = parseFloat(exportResolution.value);
+      const text = editor.value;
+      const data = parser.parse(text);
+      const layout = renderer.computeLayout(data);
+
+      const origCanvas = canvas;
+      const origCtx = ctx;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const baseName = (data.settings.title || 'jianpu').replace(/[^\w\u4e00-\u9fa5]/g, '_');
+
+      try {
+        btnConfirmExport.disabled = true;
+        btnConfirmExport.textContent = '导出中…';
+        status.textContent = '正在导出…';
+
+        if (!layout) {
+          // 空乐谱
+          const tmp = document.createElement('canvas');
+          canvas = tmp;
+          ctx = tmp.getContext('2d');
+          renderer.renderEmpty({ scale });
+          const link = document.createElement('a');
+          link.download = `${baseName}_${dateStr}.png`;
+          link.href = tmp.toDataURL('image/png');
+          link.click();
+          status.textContent = '已导出';
+          return;
+        }
+
+        const A4_HEIGHT = 1050;
+        const MARGIN_Y = 50;
+        const titleHeader = (layout.settings.title ? 40 : 0) + 50; // 标题 + 调号高度
+        const firstPageAvailable = A4_HEIGHT - MARGIN_Y - MARGIN_Y - titleHeader;
+        const otherPageAvailable = A4_HEIGHT - MARGIN_Y - MARGIN_Y;
+
+        const pages = [];
+        let currentPage = { lines: [], usedHeight: 0 };
+        let isFirstPage = true;
+
+        for (let i = 0; i < layout.lines.length; i++) {
+          const h = layout.lineHeights[i];
+          const available = isFirstPage ? firstPageAvailable : otherPageAvailable;
+
+          if (currentPage.lines.length === 0) {
+            currentPage.lines.push(i);
+            currentPage.usedHeight = h;
+          } else if (currentPage.usedHeight + h <= available) {
+            currentPage.lines.push(i);
+            currentPage.usedHeight += h;
+          } else {
+            pages.push(currentPage);
+            currentPage = { lines: [i], usedHeight: h };
+            isFirstPage = false;
+          }
+        }
+        if (currentPage.lines.length > 0) pages.push(currentPage);
+
+        if (pages.length === 1) {
+          // 单页：直接导出 PNG
+          const tmp = document.createElement('canvas');
+          canvas = tmp;
+          ctx = tmp.getContext('2d');
+          renderer.render(data, { scale });
+
+          const link = document.createElement('a');
+          link.download = `${baseName}_${dateStr}.png`;
+          link.href = tmp.toDataURL('image/png');
+          link.click();
+          status.textContent = '已导出 PNG';
+        } else {
+          // 多页：打包 ZIP
+          const zip = new JSZip();
+          const folder = zip.folder(baseName);
+
+          for (let p = 0; p < pages.length; p++) {
+            const tmp = document.createElement('canvas');
+            canvas = tmp;
+            ctx = tmp.getContext('2d');
+            renderer.render(data, {
+              scale,
+              pageInfo: { pageIndex: p, lineIndices: pages[p].lines }
+            });
+
+            const blob = await new Promise(resolve => tmp.toBlob(resolve, 'image/png'));
+            folder.file(`第${p + 1}页.png`, blob);
+          }
+
+          const zipBlob = await zip.generateAsync({ type: 'blob' });
+          const link = document.createElement('a');
+          link.download = `${baseName}_${dateStr}.zip`;
+          link.href = URL.createObjectURL(zipBlob);
+          link.click();
+          status.textContent = `已导出 ${pages.length} 页 ZIP`;
+        }
+      } catch (err) {
+        console.error(err);
+        status.textContent = '导出失败：' + err.message;
+      } finally {
+        canvas = origCanvas;
+        ctx = origCtx;
+        btnConfirmExport.disabled = false;
+        btnConfirmExport.textContent = '导出';
+        exportModal.classList.remove('active');
+        setTimeout(() => status.textContent = '就绪', 3000);
+      }
+    }
 
     // 示例按钮
     document.getElementById('btnExample').addEventListener('click', () => {
@@ -3854,6 +4083,70 @@
     window.addEventListener('resize', () => {
       render();
     });
+
+    // 导出对话框初始化（DOM 已就绪后绑定）
+    function initExportModal() {
+      const exportModal = document.getElementById('exportModal');
+      const exportResolution = document.getElementById('exportResolution');
+      const exportHint = document.getElementById('exportHint');
+      const btnCancelExport = document.getElementById('btnCancelExport');
+      const btnConfirmExport = document.getElementById('btnConfirmExport');
+      if (!exportModal || !exportResolution) return;
+
+      const RESOLUTION_HINTS = {
+        '1.5': { label: '屏幕浏览', size: '约 1080×1600 像素', file: '文件约 200–400 KB', desc: '适合微信、网页分享，加载快。' },
+        '3.5': { label: '高清打印', size: '约 2520×3700 像素', file: '文件约 1–2 MB', desc: '适合 A4 纸打印，字迹清晰无锯齿。' },
+        '5':   { label: '超清打印', size: '约 3600×5300 像素', file: '文件约 2–4 MB', desc: '适合高精度打印或放大查看。' }
+      };
+
+      function updateExportHint() {
+        const val = exportResolution.value;
+        const info = RESOLUTION_HINTS[val];
+        if (info) {
+          exportHint.innerHTML = `<strong>${info.label}</strong>：${info.size}，${info.file}<br>${info.desc}`;
+        }
+      }
+      exportResolution.addEventListener('change', updateExportHint);
+      updateExportHint();
+
+      document.getElementById('btnExport').addEventListener('click', () => {
+        exportModal.classList.add('active');
+      });
+
+      btnCancelExport.addEventListener('click', () => {
+        exportModal.classList.remove('active');
+      });
+
+      exportModal.addEventListener('click', (e) => {
+        if (e.target === exportModal) exportModal.classList.remove('active');
+      });
+
+      btnConfirmExport.addEventListener('click', doExport);
+    }
+    window.addEventListener('DOMContentLoaded', initExportModal);
   </script>
+
+  <!-- 导出对话框 -->
+  <div class="modal-overlay" id="exportModal">
+    <div class="modal">
+      <div class="modal-title">📥 导出乐谱图片</div>
+      <div class="modal-body">
+        <div class="modal-label">选择分辨率</div>
+        <select class="modal-select" id="exportResolution">
+          <option value="1.5" data-label="屏幕浏览">屏幕浏览（130 DPI，适合分享）</option>
+          <option value="3.5" data-label="高清打印" selected>高清打印（300 DPI，A4标准）</option>
+          <option value="5" data-label="超清打印">超清打印（430 DPI，高精度）</option>
+        </select>
+        <div class="modal-hint" id="exportHint">
+          <strong>高清打印</strong>：约 2520×3700 像素，文件约 1–2 MB，<br>适合 A4 纸打印，字迹清晰无锯齿。
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn modal-btn-secondary" id="btnCancelExport">取消</button>
+        <button class="modal-btn modal-btn-primary" id="btnConfirmExport">导出</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
