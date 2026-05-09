@@ -1309,7 +1309,7 @@
 
     // ===== 预览配置 =====
     const appConfig = {
-      lineHeight: 67,
+      lineHeight: 81,
       enableMaxMeasures: false,
       maxMeasuresPerLine: null,
     };
@@ -1319,7 +1319,7 @@
         const saved = localStorage.getItem('jianpu_editor_settings');
         if (saved) {
           const parsed = JSON.parse(saved);
-          appConfig.lineHeight = Math.max(40, Math.min(150, parseInt(parsed.lineHeight) || 67));
+          appConfig.lineHeight = Math.max(40, Math.min(150, parseInt(parsed.lineHeight) || 81));
           appConfig.enableMaxMeasures = !!parsed.enableMaxMeasures;
           appConfig.maxMeasuresPerLine = appConfig.enableMaxMeasures
             ? Math.max(2, Math.min(20, parseInt(parsed.maxMeasuresPerLine) || 4))
@@ -2240,7 +2240,7 @@
         this.ctx = ctx;
         this.config = {
           noteSize: 28,
-          lineHeight: 67,
+          lineHeight: 81,
           measureGap: 40,
           noteGap: 36,
           marginX: 60,
@@ -2275,7 +2275,7 @@
           )
         );
 
-        const lineHeight = this.config.lineHeight || 67;
+        const lineHeight = this.config.lineHeight || 81;
         const labelExtraHeight = 18;
         const titleHeight = settings.title ? 40 : 0;
         let totalHeight = MARGIN_Y * 2 + titleHeight + 20;
@@ -2376,7 +2376,7 @@
           )
         );
 
-        const lineHeight = this.config.lineHeight || 67;
+        const lineHeight = this.config.lineHeight || 81;
         const labelExtraHeight = 18;
         const titleHeight = settings.title ? 40 : 0;
         let totalHeight = MARGIN_Y * 2 + titleHeight + 20;
@@ -3752,7 +3752,7 @@
         const MARGIN_X = 40;
         const MARGIN_Y = 50;
 
-        const lineHeight = this.config.lineHeight || 67;
+        const lineHeight = this.config.lineHeight || 81;
         const labelExtraHeight = 18;
         const titleHeight = settings.title ? 40 : 0;
         let totalHeight = MARGIN_Y * 2 + titleHeight + 20;
@@ -4158,7 +4158,7 @@
           }
         } else {
           // 先计算每页高度
-          const lineH = appConfig.lineHeight || 67;
+          const lineH = appConfig.lineHeight || 81;
           const labelExtra = 18;
           const firstPageHeader = (layout.settings.title ? 35 : 0) + Math.round(lineH * 0.75);
           const pageHeights = pages.map((pg, idx) => {
@@ -4603,21 +4603,38 @@
     function initSettingsModal() {
       const settingsModal = document.getElementById('settingsModal');
       const lineHeightSlider = document.getElementById('lineHeightSlider');
+      const lineHeightNumber = document.getElementById('lineHeightNumber');
       const lineHeightValue = document.getElementById('lineHeightValue');
       const enableMaxMeasures = document.getElementById('enableMaxMeasures');
       const maxMeasuresSlider = document.getElementById('maxMeasuresSlider');
+      const maxMeasuresNumber = document.getElementById('maxMeasuresNumber');
       const maxMeasuresValue = document.getElementById('maxMeasuresValue');
       const btnCancelSettings = document.getElementById('btnCancelSettings');
       const btnConfirmSettings = document.getElementById('btnConfirmSettings');
 
       if (!settingsModal) return;
 
+      function syncLineHeight(val) {
+        val = Math.max(40, Math.min(150, parseInt(val) || 81));
+        lineHeightSlider.value = val;
+        lineHeightNumber.value = val;
+        lineHeightValue.textContent = val + 'px';
+      }
+
+      function syncMaxMeasures(val) {
+        val = Math.max(2, Math.min(20, parseInt(val) || 4));
+        maxMeasuresSlider.value = val;
+        maxMeasuresNumber.value = val;
+        maxMeasuresValue.textContent = val;
+      }
+
       // 同步 UI（配置已在页面加载时恢复）
-      lineHeightSlider.value = appConfig.lineHeight;
-      lineHeightValue.textContent = appConfig.lineHeight + 'px';
+      syncLineHeight(appConfig.lineHeight);
       enableMaxMeasures.checked = appConfig.enableMaxMeasures;
       maxMeasuresSlider.value = appConfig.maxMeasuresPerLine || 4;
+      maxMeasuresNumber.value = appConfig.maxMeasuresPerLine || 4;
       maxMeasuresSlider.disabled = !appConfig.enableMaxMeasures;
+      maxMeasuresNumber.disabled = !appConfig.enableMaxMeasures;
       maxMeasuresValue.textContent = appConfig.enableMaxMeasures ? (appConfig.maxMeasuresPerLine || 4) : '自动';
 
       // 打开设置
@@ -4635,34 +4652,55 @@
 
       // 行距滑块
       lineHeightSlider.addEventListener('input', (e) => {
-        lineHeightValue.textContent = e.target.value + 'px';
+        syncLineHeight(e.target.value);
+      });
+
+      // 行距数字输入
+      lineHeightNumber.addEventListener('change', (e) => {
+        syncLineHeight(e.target.value);
+      });
+      lineHeightNumber.addEventListener('input', (e) => {
+        syncLineHeight(e.target.value);
       });
 
       // 限制小节数复选框
       enableMaxMeasures.addEventListener('change', (e) => {
-        maxMeasuresSlider.disabled = !e.target.checked;
-        maxMeasuresValue.textContent = e.target.checked ? maxMeasuresSlider.value : '自动';
+        const checked = e.target.checked;
+        maxMeasuresSlider.disabled = !checked;
+        maxMeasuresNumber.disabled = !checked;
+        maxMeasuresValue.textContent = checked ? maxMeasuresSlider.value : '自动';
       });
 
       // 小节数滑块
       maxMeasuresSlider.addEventListener('input', (e) => {
         if (enableMaxMeasures.checked) {
-          maxMeasuresValue.textContent = e.target.value;
+          syncMaxMeasures(e.target.value);
         }
       });
 
-      // 确定
+      // 小节数数字输入
+      maxMeasuresNumber.addEventListener('change', (e) => {
+        if (enableMaxMeasures.checked) {
+          syncMaxMeasures(e.target.value);
+        }
+      });
+      maxMeasuresNumber.addEventListener('input', (e) => {
+        if (enableMaxMeasures.checked) {
+          syncMaxMeasures(e.target.value);
+        }
+      });
+
       // 恢复默认
       document.getElementById('btnResetSettings').addEventListener('click', () => {
-        appConfig.lineHeight = 67;
+        appConfig.lineHeight = 81;
         appConfig.enableMaxMeasures = false;
         appConfig.maxMeasuresPerLine = null;
 
-        lineHeightSlider.value = 67;
-        lineHeightValue.textContent = '67px';
+        syncLineHeight(81);
         enableMaxMeasures.checked = false;
-        maxMeasuresSlider.value = 4;
+        syncMaxMeasures(4);
         maxMeasuresSlider.disabled = true;
+        maxMeasuresNumber.disabled = true;
         maxMeasuresValue.textContent = '自动';
 
         localStorage.setItem('jianpu_editor_settings', JSON.stringify({
@@ -4711,8 +4749,8 @@
       <div class="modal-body">
         <div class="modal-label">导出格式</div>
         <select class="modal-select" id="exportFormat">
+          <option value="svg" selected>SVG 矢量（打印更清晰）</option>
           <option value="png">PNG 位图（兼容性好）</option>
-          <option value="svg">SVG 矢量（打印更清晰）</option>
         </select>
         <div class="modal-label" id="resolutionLabel" style="margin-top:12px;">选择分辨率</div>
         <select class="modal-select" id="exportResolution">
@@ -4738,8 +4776,9 @@
       <div class="modal-body">
         <div class="modal-label">行距</div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-          <input type="range" class="settings-slider" id="lineHeightSlider" min="40" max="150" value="67">
-          <span class="settings-value" id="lineHeightValue">67px</span>
+          <input type="range" class="settings-slider" id="lineHeightSlider" min="40" max="150" value="81">
+          <input type="number" id="lineHeightNumber" min="40" max="150" value="81" style="width:60px;padding:6px 8px;border:1.5px solid var(--outline);border-radius:8px;font-size:13px;text-align:center;outline:none;">
+          <span class="settings-value" id="lineHeightValue">px</span>
         </div>
 
         <div class="modal-label">每行最大小节数</div>
@@ -4749,6 +4788,7 @@
         </div>
         <div style="display:flex;align-items:center;gap:12px;margin-left:24px;">
           <input type="range" class="settings-slider" id="maxMeasuresSlider" min="2" max="20" value="4" disabled>
+          <input type="number" id="maxMeasuresNumber" min="2" max="20" value="4" disabled style="width:60px;padding:6px 8px;border:1.5px solid var(--outline);border-radius:8px;font-size:13px;text-align:center;outline:none;">
           <span class="settings-value" id="maxMeasuresValue">自动</span>
         </div>
       </div>
