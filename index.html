@@ -1413,6 +1413,10 @@
                 if (token.repeatEnd) currentMeasure.repeatEnd = true;
                 measures.push(currentMeasure);
                 currentMeasure = this.createEmptyMeasure();
+              } else if (measures.length > 0 && token.repeatEnd) {
+                // 当前小节为空，将 repeatEnd 合并到前一小节
+                measures[measures.length - 1].repeatEnd = true;
+                measures[measures.length - 1].isDouble = token.isDouble;
               }
               if (token.repeatStart) {
                 currentMeasure.repeatStart = true;
@@ -1420,7 +1424,11 @@
             } else if (token.type === 'voltaStart') {
               currentMeasure.voltaStart = token.number;
             } else if (token.type === 'voltaEnd') {
-              currentMeasure.voltaEnd = true;
+              if (currentMeasure.notes.length === 0 && currentMeasure.voltaStart === null && currentMeasure.repeatStart === false && measures.length > 0) {
+                measures[measures.length - 1].voltaEnd = true;
+              } else {
+                currentMeasure.voltaEnd = true;
+              }
             } else if (token.type === 'note' || token.type === 'rest' || token.type === 'grace' || token.type === 'beat') {
               currentMeasure.notes.push(token);
             } else if (['segno','coda','toCoda','dc','ds','fine'].includes(token.type)) {
@@ -1478,7 +1486,9 @@
           // 跳过非当前房子的跳房子小节
           if (measure.voltaStart !== null && measure.voltaStart !== currentVoltaPass) {
             let endPtr = pointer + 1;
+            let foundRepeatEnd = false;
             while (endPtr < measures.length) {
+              if (measures[endPtr].repeatEnd) foundRepeatEnd = true;
               if (measures[endPtr].voltaEnd) {
                 endPtr++;
                 break;
@@ -1486,6 +1496,34 @@
               if (measures[endPtr].voltaStart !== null) break;
               endPtr++;
             }
+
+            // 如果跳过的范围内包含 repeatEnd，则执行跳回（第一房子结束后跳回）
+            if (foundRepeatEnd) {
+              let repeatStart = -1;
+              let depth = 0;
+              for (let i = pointer; i >= 0; i--) {
+                if (i < pointer && measures[i].repeatEnd) depth++;
+                if (measures[i].repeatStart) {
+                  if (depth > 0) depth--;
+                  else { repeatStart = i; break; }
+                }
+              }
+              if (repeatStart < 0) repeatStart = 0;
+
+              const repeatKey = 'rep_' + repeatStart;
+              const hasVolta = measures.slice(repeatStart, endPtr).some(m => m.voltaStart !== null);
+
+              if (!repeatVisits[repeatKey]) {
+                repeatVisits[repeatKey] = 1;
+                if (hasVolta) currentVoltaPass = 2;
+                pointer = repeatStart;
+                continue;
+              } else if (repeatVisits[repeatKey] === 1 && hasVolta) {
+                repeatVisits[repeatKey] = 2;
+                currentVoltaPass = 1;
+              }
+            }
+
             pointer = endPtr;
             continue;
           }
@@ -1534,7 +1572,9 @@
             }
             if (repeatStart < 0) repeatStart = 0;
 
-            const repeatKey = 'rep_' + repeatStart + '_' + pointer;
+            // 同一反复区间（由 repeatStart 标识）只应被访问两次，
+            // 不用 pointer 是因为跳房子的多个房子会有不同的 repeatEnd 位置
+            const repeatKey = 'rep_' + repeatStart;
             const hasVolta = measures.slice(repeatStart, pointer + 1).some(m => m.voltaStart !== null);
 
             if (!repeatVisits[repeatKey]) {
@@ -2397,8 +2437,13 @@
         const lines = [];
         let currentLine = [];
         let currentUnits = 0;
+        let inVolta = false;
 
         for (const measure of measures) {
+          if (measure.voltaStart !== null) {
+            inVolta = true;
+          }
+
           // 计算小节的时值单位（基于实际时值，而不是音符数量）
           let measureUnits = 0;
           for (const note of measure.notes) {
@@ -2407,13 +2452,23 @@
 
           // 如果当前行已经有小节，且加入这个小节会超过限制，则换行
           // 但至少要放一个小节（避免空行）
+          // 若正处于跳房子内部，则避免拆散跳房子
           if (currentLine.length > 0 && currentUnits + measureUnits > maxPerLine) {
-            lines.push(currentLine);
-            currentLine = [measure];
-            currentUnits = measureUnits;
+            if (inVolta) {
+              currentLine.push(measure);
+              currentUnits += measureUnits;
+            } else {
+              lines.push(currentLine);
+              currentLine = [measure];
+              currentUnits = measureUnits;
+            }
           } else {
             currentLine.push(measure);
             currentUnits += measureUnits;
+          }
+
+          if (measure.voltaEnd) {
+            inVolta = false;
           }
         }
 
@@ -2675,7 +2730,11 @@
           // 跳房子结束
           if (measure.voltaEnd && voltaStartX !== null) {
             // 有后反复号时，跳房子线对齐到后反复号的细线位置
-            const voltaEndX = measure.repeatEnd ? currentX - 5 : currentX;
+            let voltaEndX = measure.repeatEnd ? currentX - 5 : currentX;
+            // 若同时是终止线（isDouble），跳房子线应延伸到最外侧粗线/第三条线
+            if (measure.isDouble && isLast) {
+              voltaEndX = currentX + 5;
+            }
             this.drawVoltaBracket(ctx, voltaStartX, voltaEndX, y, voltaNumber);
             voltaStartX = null;
             voltaNumber = null;
