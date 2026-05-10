@@ -483,16 +483,6 @@
         width: 100% !important;
         padding: 8px;
       }
-      .zoom-btn {
-        width: 36px;
-        height: 36px;
-        font-size: 18px;
-      }
-
-      .zoom-level {
-        font-size: 13px;
-        min-width: 50px;
-      }
 
       #jianpuCanvas {
         width: 100% !important;
@@ -742,7 +732,7 @@
     }
 
     .preview-header {
-      padding: 12px 16px;
+      padding: 8px 16px;
       background: var(--surface);
       border-bottom: 1px solid var(--border);
       font-size: 13px;
@@ -756,46 +746,11 @@
 
     .zoom-controls {
       display: flex;
-      gap: 4px;
       align-items: center;
-    }
-
-    .zoom-btn {
-      width: 36px;
-      height: 36px;
-      border: none;
-      background: var(--surface-variant);
-      color: var(--text-secondary);
-      border-radius: 50%;
-      cursor: pointer;
-      font-size: 18px;
-      font-weight: 500;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      touch-action: manipulation;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: var(--shadow-1);
-    }
-
-    .zoom-btn:hover {
-      background: var(--primary-container);
-      color: var(--primary);
-      transform: scale(1.1);
-    }
-
-    .zoom-btn:active {
-      transform: scale(0.95);
-    }
-
-    .zoom-level {
-      min-width: 50px;
-      text-align: center;
-      font-size: 13px;
     }
 
     .zoom-select {
-      padding: 6px 12px;
+      padding: 4px 8px;
       border: 1.5px solid var(--outline);
       border-radius: 20px;
       background: var(--surface);
@@ -804,7 +759,7 @@
       font-weight: 600;
       cursor: pointer;
       outline: none;
-      min-width: 90px;
+      min-width: 55px;
       text-align: center;
       transition: all 0.2s;
       appearance: none;
@@ -1268,7 +1223,6 @@
       <div class="preview-header">
         <span><span class="panel-header-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></span>预览</span>
         <div class="zoom-controls">
-          <button class="zoom-btn" id="zoomOut" title="缩小">−</button>
           <select class="zoom-select" id="zoomSelect">
             <option value="0.5">50%</option>
             <option value="0.75">75%</option>
@@ -1277,7 +1231,6 @@
             <option value="1.5">150%</option>
             <option value="2">200%</option>
           </select>
-          <button class="zoom-btn" id="zoomIn" title="放大">+</button>
         </div>
       </div>
       <div class="canvas-container" id="canvasContainer">
@@ -4438,21 +4391,13 @@
 
     // 示例按钮
     document.getElementById('btnExample').addEventListener('click', () => {
-      const example = `!小星星（含反复标记演示）
+      const example = `!小星星
 %C=4/4
 @100
 
-|: 1 1 5 5 | 6 6 5 - |
-[1 4 4 3 3 | 2 2 1 - |]
-[2 5 5 4 4 | 3 3 2 - |] :|
-1 1 5 5 | 6 6 5 - | 4 4 3 3 | 2 2 1 - ||
-
-# 反复记号线速查：
-# |: 前反复号   :| 后反复号
-# [1 ] 第1房子  [2 ] 第2房子
-# DC 从头反复   DS 从记号反复
-# Fine 结束     Segno 记号 𝄋
-# Coda 尾声 𝆌   ToCoda 跳到尾声`;
+1 1 5 5 | 6 6 5 - | 4 4 3 3 | 2 2 1 - |
+5 5 4 4 | 3 3 2 - | 5 5 4 4 | 3 3 2 - |
+1 1 5 5 | 6 6 5 - | 4 4 3 3 | 2 2 1 - ||`;
       editor.value = example;
       render();
       status.innerHTML = '<span class="status-dot"></span>已加载：小星星';
@@ -4494,27 +4439,6 @@
     });
 
     // 缩放控制
-    document.getElementById('zoomIn').addEventListener('click', () => {
-      const zoomSelect = document.getElementById('zoomSelect');
-      const options = Array.from(zoomSelect.options).filter(o => o.value !== 'fit').map(o => parseFloat(o.value));
-      const currentIdx = options.findIndex(v => v >= state.zoom);
-      const nextZoom = currentIdx < options.length - 1 ? options[currentIdx + 1] : options[options.length - 1];
-      state.zoom = nextZoom;
-      updateZoom();
-      zoomSelect.value = String(nextZoom);
-    });
-
-    document.getElementById('zoomOut').addEventListener('click', () => {
-      const zoomSelect = document.getElementById('zoomSelect');
-      const options = Array.from(zoomSelect.options).map(o => parseFloat(o.value));
-      const currentIdx = options.findIndex(v => v >= state.zoom);
-      const prevIdx = currentIdx > 0 ? currentIdx - 1 : 0;
-      const prevZoom = options[prevIdx];
-      state.zoom = prevZoom;
-      updateZoom();
-      zoomSelect.value = String(prevZoom);
-    });
-
     document.getElementById('zoomSelect').addEventListener('change', (e) => {
       state.zoom = parseFloat(e.target.value);
       updateZoom();
