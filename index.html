@@ -3384,7 +3384,10 @@
       renderRest(ctx, note, x, y, noteWidth, group = null) {
         const size = 20;
 
-        ctx.fillStyle = '#1a1a2e';
+        const isActive = this.isNoteActive(note);
+        const color = isActive ? '#ef4444' : '#1a1a2e';
+
+        ctx.fillStyle = color;
         ctx.font = `${size}px "Segoe UI", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -3396,7 +3399,7 @@
           ctx.fillText('0', x, y);
         } else if (note.duration >= 1) {
           // 全休止符/二分休止符/增时线 - 用横线表示
-          ctx.strokeStyle = '#1a1a2e';
+          ctx.strokeStyle = color;
           ctx.lineWidth = 2;
           // 横线宽度适配音符宽度，最大不超过 size * 0.8
           const lineWidth = Math.min(size * 0.8, (noteWidth || size) * 0.7);
@@ -3413,7 +3416,7 @@
 
         // 单音符的下划线（不在组内的，或组内只有一个音符的）
         if (note.underlines > 0 && (!group || group.indices.length === 1)) {
-          ctx.strokeStyle = '#1a1a2e';
+          ctx.strokeStyle = color;
           ctx.lineWidth = 2;
           const lineY = y + size * 0.4 + 2;
           const lineWidth = size * 0.486;
@@ -3752,6 +3755,7 @@
                 notes.push(noteData);
               }
             } else if (note.type === 'rest') {
+              addPlaybackTime(note, time, duration);
               // 增时线：延长前一个实际音符或节拍符的时值
               if (note.isExtension) {
                 let j = i - 1;
