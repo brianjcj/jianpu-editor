@@ -3931,10 +3931,6 @@
           this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
           this.masterGain = this.audioCtx.createGain();
           this.masterGain.connect(this.audioCtx.destination);
-          // 创建 MediaStreamDestination，后续用一个独立弱信号维持 iOS 后台播放
-          if (this.audioCtx.createMediaStreamDestination) {
-            this.streamDest = this.audioCtx.createMediaStreamDestination();
-          }
           // 监听状态变化，自动恢复被挂起的 AudioContext
           this.audioCtx.onstatechange = () => {
             if (this.audioCtx && this.audioCtx.state !== 'running' && this.isPlaying) {
@@ -3942,7 +3938,11 @@
             }
           };
         }
-        // 将隐藏 audio 元素绑定到媒体流（必须在用户交互后执行）
+        // 创建 MediaStreamDestination（之前被 stop 清理后需要重建）
+        if (this.audioCtx && !this.streamDest && this.audioCtx.createMediaStreamDestination) {
+          this.streamDest = this.audioCtx.createMediaStreamDestination();
+        }
+        // 将隐藏 audio 元素绑定到媒体流（必须在用户交互后执行；audioCtx 已存在时也要重新绑定）
         if (this.streamDest && !this.silentAudio.srcObject) {
           this.silentAudio.srcObject = this.streamDest.stream;
         }
@@ -3955,8 +3955,8 @@
       }
 
       play(notes, totalDuration) {
+        this.stop(true, false, true);
         this.initAudio();
-        this.stop(true, false);
 
         const now = this.audioCtx.currentTime;
         let offset = this.playbackOffset || 0;
@@ -4062,7 +4062,7 @@
           progressBar.style.width = progress + '%';
 
           if (progress >= 100) {
-            this.stop(false, true);
+            this.stop(false, true, true);
             this._resetPlayButton();
             return;
           }
@@ -4079,7 +4079,7 @@
         }
       }
 
-      stop(immediate = false, resetOffset = true) {
+      stop(immediate = false, resetOffset = true, releaseAudio = true) {
         const wasPlaying = this.isPlaying;
         this.isPlaying = false;
         state.isPlaying = false;
@@ -4134,26 +4134,36 @@
           }, 120);
         }
 
-        // 停止 keeper 振荡器并清理
-        if (this.keeperOsc) {
-          try { this.keeperOsc.stop(); } catch (e) {}
-          try { this.keeperOsc.disconnect(); } catch (e) {}
-          this.keeperOsc = null;
-        }
-        if (this.keeperGain) {
-          try { this.keeperGain.disconnect(); } catch (e) {}
-          this.keeperGain = null;
-        }
-        // 暂停隐藏音频，释放后台媒体会话
-        this.silentAudio.pause();
-        this.silentAudio.currentTime = 0;
-        if ('mediaSession' in navigator) {
-          navigator.mediaSession.metadata = null;
-        }
+        if (releaseAudio) {
+          // 停止 keeper 振荡器并清理
+          if (this.keeperOsc) {
+            try { this.keeperOsc.stop(); } catch (e) {}
+            try { this.keeperOsc.disconnect(); } catch (e) {}
+            this.keeperOsc = null;
+          }
+          if (this.keeperGain) {
+            try { this.keeperGain.disconnect(); } catch (e) {}
+            this.keeperGain = null;
+          }
+          // 暂停隐藏音频并彻底断开 MediaStream，释放后台媒体会话
+          this.silentAudio.pause();
+          this.silentAudio.currentTime = 0;
+          this.silentAudio.srcObject = null;
+          try { this.silentAudio.load(); } catch (e) {}
+          // 停止 MediaStream 的所有轨道，确保系统媒体中心彻底移除
+          if (this.streamDest && this.streamDest.stream) {
+            this.streamDest.stream.getTracks().forEach(t => t.stop());
+          }
+          this.streamDest = null;
+          if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = null;
+            try { navigator.mediaSession.playbackState = 'none'; } catch (e) {}
+          }
 
-        document.getElementById('playbackBar').style.display = 'none';
-        document.getElementById('playbackProgress').style.width = '0%';
-        status.textContent = '就绪';
+          document.getElementById('playbackBar').style.display = 'none';
+          document.getElementById('playbackProgress').style.width = '0%';
+          status.textContent = '就绪';
+        }
       }
     }
 
@@ -4179,7 +4189,7 @@
     // 播放按钮
     document.getElementById('btnPlay').addEventListener('click', () => {
       if (state.isPlaying) {
-        player.stop(false, false);
+        player.stop(false, false, false);
         document.getElementById('btnPlay').innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> 播放';
         document.getElementById('btnPlay').classList.remove('btn-active');
         return;
