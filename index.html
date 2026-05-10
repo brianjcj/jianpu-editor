@@ -1254,6 +1254,7 @@
       audioCtx: null,
       currentSource: null,
       playbackStartTime: 0,
+      playbackCurrentTime: 0,
       playbackNotes: [],
       scheduledNotes: [],
       bpm: 120,
@@ -2255,6 +2256,9 @@
           return;
         }
 
+        // 先计算播放时间戳（供渲染时使用）
+        this.collectPlaybackNotes(flatMeasures || measures, settings);
+
         const A4_WIDTH = 720;
         const A4_HEIGHT = 1050;
         const MARGIN_X = 40;
@@ -2351,7 +2355,6 @@
         state.bpm = settings.bpm;
         state.key = settings.key;
         state.timeSignature = settings.timeSignature;
-        this.collectPlaybackNotes(flatMeasures || measures, settings);
       }
 
       computeLayout(data) {
@@ -2799,11 +2802,20 @@
         return true;
       }
 
+      isNoteActive(note) {
+        if (!state.isPlaying || !note._playbackTimes) return false;
+        const t = state.playbackCurrentTime;
+        return note._playbackTimes.some(pt => t >= pt.startTime && t < pt.startTime + pt.duration);
+      }
+
       renderNote(ctx, note, x, y, group, notePositions, noteIdx) {
         const size = 20; // 缩小字号适配 A4
         const dotRadius = 2;
 
-        ctx.fillStyle = '#1a1a2e';
+        const isActive = this.isNoteActive(note);
+        const color = isActive ? '#ef4444' : '#1a1a2e';
+
+        ctx.fillStyle = color;
         ctx.font = `bold ${size}px "Segoe UI", "PingFang SC", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -2834,7 +2846,7 @@
 
         // 演奏技法符号（弹 \，挑 /）
         if (note.technique && TECHNIQUES[note.technique]) {
-          ctx.strokeStyle = '#1a1a2e';
+          ctx.strokeStyle = color;
           ctx.lineWidth = 1.5;
           const techY = note.octave > 0
             ? noteY - size * 0.75 - (note.octave - 1) * 10 - 14
@@ -2862,7 +2874,7 @@
 
         // 单音符的下划线（不在组内的，或组内只有一个音符的）
         if (note.underlines > 0 && (!group || group.indices.length === 1)) {
-          ctx.strokeStyle = '#1a1a2e';
+          ctx.strokeStyle = color;
           ctx.lineWidth = 2;
           const lineY = noteY + size * 0.4 + 2;
           const lineWidth = size * 0.567; // 覆盖音符宽度的70%
@@ -2901,7 +2913,7 @@
           const slideX = x + xOffset - 6;
           const slideY = noteY - 20;
 
-          ctx.fillStyle = '#1a1a2e';
+          ctx.fillStyle = color;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
 
@@ -2936,7 +2948,7 @@
           }
 
           // 箭头线：尾部固定，向右延伸到目标音右边界
-          ctx.strokeStyle = '#1a1a2e';
+          ctx.strokeStyle = color;
           ctx.lineWidth = 1.2;
           const lineY = slideY + slideSize * 0.5 + 2;
           const tailX = x + xOffset - 10;
@@ -3083,7 +3095,8 @@
         const size = 14;
         const dotRadius = 2;
 
-        ctx.fillStyle = '#1a1a2e';
+        const groupActive = state.isPlaying && notes.some(n => this.isNoteActive(n));
+
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
@@ -3091,6 +3104,9 @@
 
         for (let idx = 0; idx < notes.length; idx++) {
           const note = notes[idx];
+          const isActive = this.isNoteActive(note);
+          const color = isActive ? '#ef4444' : '#1a1a2e';
+          ctx.fillStyle = color;
           const graceX = xs[idx] - size * 0.8;
           let xOffset = 0;
 
@@ -3113,7 +3129,7 @@
 
           // 演奏技法符号
           if (note.technique && TECHNIQUES[note.technique]) {
-            ctx.strokeStyle = '#1a1a2e';
+            ctx.strokeStyle = color;
             ctx.lineWidth = 1.2;
             const techY = note.octave > 0
               ? graceY - size * 0.75 - (note.octave - 1) * 7 - 10
@@ -3134,7 +3150,7 @@
         }
 
         if (notes.some(n => n.underlines > 0)) {
-          ctx.strokeStyle = '#1a1a2e';
+          ctx.strokeStyle = groupActive ? '#ef4444' : '#1a1a2e';
           ctx.lineWidth = 1.2;
           const baseLineY = graceY + size * 0.4 + 1;
           const lineSpacing = 3;
@@ -3165,6 +3181,8 @@
         for (let idx = 0; idx < notes.length; idx++) {
           const note = notes[idx];
           if (note.octave < 0) {
+            const isActive = this.isNoteActive(note);
+            ctx.fillStyle = isActive ? '#ef4444' : '#1a1a2e';
             const graceX = xs[idx] - size * 0.8;
             let xOffset = note.accidental ? size * 0.2 : 0;
             let lowerDotBaseY;
@@ -3202,7 +3220,7 @@
           const cpX = (startX + endX) / 2;
           const cpY = Math.max(startY, endY) + size * 0.6;
 
-          ctx.strokeStyle = '#1a1a2e';
+          ctx.strokeStyle = groupActive ? '#ef4444' : '#1a1a2e';
           ctx.lineWidth = 1.2;
           ctx.beginPath();
           ctx.moveTo(startX, startY);
@@ -3624,10 +3642,28 @@
       }
 
       collectPlaybackNotes(measures, settings) {
+        // 清除之前的时间标记
+        for (const measure of measures) {
+          for (const note of measure.notes) {
+            delete note._playbackTimes;
+          }
+        }
+
         const notes = [];
         let time = 0;
         const quarterDuration = 60 / settings.bpm;
         let graceOffset = 0; // 连续倚音在主音前占用的累计偏移
+
+        function addPlaybackTime(note, startTime, duration) {
+          note._playbackTimes = note._playbackTimes || [];
+          note._playbackTimes.push({ startTime, duration });
+        }
+
+        function extendLastPlaybackTime(note, extraDuration) {
+          if (note._playbackTimes && note._playbackTimes.length > 0) {
+            note._playbackTimes[note._playbackTimes.length - 1].duration += extraDuration;
+          }
+        }
 
         for (const measure of measures) {
           for (let i = 0; i < measure.notes.length; i++) {
@@ -3645,6 +3681,7 @@
                 octave: note.octave,
                 isGrace: true
               });
+              addPlaybackTime(note, time + graceOffset, graceDur);
               graceOffset += graceDur;
               continue;
             }
@@ -3664,12 +3701,20 @@
                 actualDuration = Math.max(duration - graceOffset, duration * 0.5);
               }
 
+              addPlaybackTime(note, time + graceOffset, actualDuration);
+
               if (isTied) {
                 // 找到最后一个非倚音的实际音符来延长
                 let k = notes.length - 1;
                 while (k >= 0 && notes[k].isGrace) k--;
                 if (k >= 0 && notes[k].digit === note.digit && notes[k].octave === note.octave) {
                   notes[k].duration += actualDuration;
+                  // 同时延长原始前一个音符的播放时长
+                  let j = i - 1;
+                  while (j >= 0 && measure.notes[j].type === 'grace') j--;
+                  if (j >= 0) {
+                    extendLastPlaybackTime(measure.notes[j], actualDuration);
+                  }
                 } else {
                   const noteData = {
                     frequency: freq,
@@ -3717,6 +3762,8 @@
                   if (k >= 0) {
                     notes[k].duration += duration;
                   }
+                  // 延长原始前一个音符的播放时长
+                  extendLastPlaybackTime(measure.notes[j], duration);
                 }
               }
             }
@@ -4011,8 +4058,11 @@
         const update = () => {
           if (!this.isPlaying || !this.audioCtx) return;
           const elapsed = this.audioCtx.currentTime - state.playbackStartTime;
+          state.playbackCurrentTime = elapsed;
           const progress = Math.min((elapsed / totalDuration) * 100, 100);
           progressBar.style.width = progress + '%';
+
+          render(); // 重绘以更新高亮
 
           if (progress >= 100) {
             this.stop(false, true, true);
@@ -4036,6 +4086,8 @@
         const wasPlaying = this.isPlaying;
         this.isPlaying = false;
         state.isPlaying = false;
+        state.playbackCurrentTime = -1;
+        render();
 
         if (!immediate && wasPlaying && this.audioCtx) {
           this.playbackOffset = Math.max(0, this.audioCtx.currentTime - state.playbackStartTime);
