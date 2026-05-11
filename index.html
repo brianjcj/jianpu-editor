@@ -808,6 +808,7 @@
       box-shadow: var(--shadow-3);
       border-radius: 12px;
       max-width: 100%;
+      cursor: pointer;
     }
 
     /* ===== Playback Progress ===== */
@@ -1349,10 +1350,15 @@
         const measures = [];
         let currentMeasure = this.createEmptyMeasure();
         let globalSettings = { bpm: 120, key: 'C', timeSignature: [4, 4], title: '' };
+        let globalOffset = 0;
 
-        for (let line of lines) {
-          line = line.trim();
-          if (!line || line.startsWith('#')) continue;
+        for (let rawLine of lines) {
+          const lineStart = globalOffset;
+          const line = rawLine.trim();
+          if (!line || line.startsWith('#')) {
+            globalOffset += rawLine.length + 1;
+            continue;
+          }
 
           // 全局设置
           if (line.startsWith('%')) {
@@ -1362,6 +1368,7 @@
               if (match[2]) globalSettings.timeSignature[0] = parseInt(match[2]);
               if (match[3]) globalSettings.timeSignature[1] = parseInt(match[3]);
             }
+            globalOffset += rawLine.length + 1;
             continue;
           }
 
@@ -1369,17 +1376,19 @@
           if (line.startsWith('@')) {
             const bpm = parseInt(line.slice(1));
             if (!isNaN(bpm)) globalSettings.bpm = bpm;
+            globalOffset += rawLine.length + 1;
             continue;
           }
 
           // 标题
           if (line.startsWith('!')) {
             globalSettings.title = line.slice(1).trim();
+            globalOffset += rawLine.length + 1;
             continue;
           }
 
           // 解析音符和小节
-          const tokens = this.tokenize(line);
+          const tokens = this.tokenize(line, lineStart);
           for (const token of tokens) {
             if (token.type === 'barline') {
               if (currentMeasure.notes.length > 0 || currentMeasure.voltaStart !== null || currentMeasure.repeatStart) {
@@ -1409,6 +1418,7 @@
               currentMeasure[token.type] = true;
             }
           }
+          globalOffset += rawLine.length + 1;
         }
 
         // 收尾小节
@@ -1417,6 +1427,17 @@
             currentMeasure.dc || currentMeasure.ds || currentMeasure.fine) {
           currentMeasure.isDouble = true;
           measures.push(currentMeasure);
+        }
+
+        // 补全每个 measure 的 sourceStart / sourceEnd
+        for (const measure of measures) {
+          if (measure.notes.length > 0) {
+            measure.sourceStart = measure.notes[0].sourceStart;
+            measure.sourceEnd = measure.notes[measure.notes.length - 1].sourceEnd;
+          } else {
+            measure.sourceStart = 0;
+            measure.sourceEnd = 0;
+          }
         }
 
         // 展开反复标记，生成扁平演奏序列
@@ -1568,7 +1589,7 @@
         return flatMeasures;
       }
 
-      tokenize(line) {
+      tokenize(line, lineStart = 0) {
         const tokens = [];
         let i = 0;
 
@@ -1578,13 +1599,13 @@
           // 小节线（支持 |: 前反复号）
           if (ch === '|') {
             if (line[i + 1] === ':' && line[i + 2] !== '|') {
-              tokens.push({ type: 'barline', isDouble: false, repeatStart: true });
+              tokens.push({ type: 'barline', isDouble: false, repeatStart: true, sourceStart: lineStart + i, sourceEnd: lineStart + i + 2 });
               i += 2;
             } else if (line[i + 1] === '|') {
-              tokens.push({ type: 'barline', isDouble: true });
+              tokens.push({ type: 'barline', isDouble: true, sourceStart: lineStart + i, sourceEnd: lineStart + i + 2 });
               i += 2;
             } else {
-              tokens.push({ type: 'barline', isDouble: false });
+              tokens.push({ type: 'barline', isDouble: false, sourceStart: lineStart + i, sourceEnd: lineStart + i + 1 });
               i++;
             }
             continue;
@@ -1598,7 +1619,7 @@
 
           // 倚音：括号内的音符，如 (3) 或 (5^)
           if (ch === '(') {
-            const grace = this.parseGraceNote(line, i);
+            const grace = this.parseGraceNote(line, i, lineStart);
             if (grace) {
               tokens.push(...grace.tokens);
               i = grace.nextIndex;
@@ -1608,7 +1629,7 @@
 
           // 连音（三连音/五连音等）：{N:...}，如 {3:1/ 2/ 3/}
           if (ch === '{') {
-            const tuplet = this.parseTuplet(line, i);
+            const tuplet = this.parseTuplet(line, i, lineStart);
             if (tuplet) {
               tokens.push(...tuplet.tokens);
               i = tuplet.nextIndex;
@@ -1619,7 +1640,7 @@
           // 跳房子 [1 [2 [3
           if (ch === '[') {
             if (line[i + 1] === '1' || line[i + 1] === '2' || line[i + 1] === '3') {
-              tokens.push({ type: 'voltaStart', number: parseInt(line[i + 1]) });
+              tokens.push({ type: 'voltaStart', number: parseInt(line[i + 1]), sourceStart: lineStart + i, sourceEnd: lineStart + i + 2 });
               i += 2;
               continue;
             }
@@ -1627,14 +1648,14 @@
 
           // 跳房子结束 ]
           if (ch === ']') {
-            tokens.push({ type: 'voltaEnd' });
+            tokens.push({ type: 'voltaEnd', sourceStart: lineStart + i, sourceEnd: lineStart + i + 1 });
             i++;
             continue;
           }
 
           // 音符（0-7）
           if (/[0-7]/.test(ch)) {
-            const note = this.parseNote(line, i);
+            const note = this.parseNote(line, i, lineStart);
             // 检测滑音：起始音 + 滑 + 目标音
             if (note.token.type === 'note' && line.slice(note.nextIndex, note.nextIndex + 1) === '滑') {
               const target = this.parseNote(line, note.nextIndex + 1);
@@ -1656,6 +1677,7 @@
 
           // 节拍/鼓点 X（无音高，纯节奏）
           if (ch === 'X' || ch === 'x') {
+            const startIdx = i;
             let hasDot = false;
             let underlines = 0;
             let isTie = false;
@@ -1691,7 +1713,9 @@
               underlines: underlines,
               hasDot: hasDot,
               isTie: isTie,
-              note: noteLabel
+              note: noteLabel,
+              sourceStart: lineStart + startIdx,
+              sourceEnd: lineStart + i2
             });
             i = i2;
             continue;
@@ -1699,6 +1723,7 @@
 
           // 增时线（延长前一个音符时值）或休止符
           if (ch === '-') {
+            const startIdx = i;
             let duration = 1;
             let hasDot = false;
             let underlines = 0;
@@ -1732,7 +1757,9 @@
               underlines: underlines,
               hasDot: hasDot,
               isExtension: true,
-              note: noteLabel
+              note: noteLabel,
+              sourceStart: lineStart + startIdx,
+              sourceEnd: lineStart + i2
             });
             i = i2;
             continue;
@@ -1742,16 +1769,16 @@
           if (ch === ':') {
             if (line[i + 1] === '|') {
               if (line[i + 2] === ':') {
-                tokens.push({ type: 'barline', isDouble: false, repeatEnd: true, repeatStart: true });
+                tokens.push({ type: 'barline', isDouble: false, repeatEnd: true, repeatStart: true, sourceStart: lineStart + i, sourceEnd: lineStart + i + 3 });
                 i += 3;
               } else if (line[i + 2] === '|' && line[i + 3] === ':') {
-                tokens.push({ type: 'barline', isDouble: true, repeatEnd: true, repeatStart: true });
+                tokens.push({ type: 'barline', isDouble: true, repeatEnd: true, repeatStart: true, sourceStart: lineStart + i, sourceEnd: lineStart + i + 4 });
                 i += 4;
               } else if (line[i + 2] === '|') {
-                tokens.push({ type: 'barline', isDouble: true, repeatEnd: true });
+                tokens.push({ type: 'barline', isDouble: true, repeatEnd: true, sourceStart: lineStart + i, sourceEnd: lineStart + i + 3 });
                 i += 3;
               } else {
-                tokens.push({ type: 'barline', isDouble: false, repeatEnd: true });
+                tokens.push({ type: 'barline', isDouble: false, repeatEnd: true, sourceStart: lineStart + i, sourceEnd: lineStart + i + 2 });
                 i += 2;
               }
               continue;
@@ -1767,7 +1794,7 @@
             if (line.slice(i, i + word.length) === word) {
               const nextChar = line[i + word.length];
               if (!nextChar || /[\s|\]:]/.test(nextChar)) {
-                tokens.push({ type: word.toLowerCase() });
+                tokens.push({ type: word.toLowerCase(), sourceStart: lineStart + i, sourceEnd: lineStart + i + word.length });
                 i += word.length;
                 matchedFlow = true;
                 break;
@@ -1788,7 +1815,7 @@
         return tokens;
       }
 
-      parseNote(line, start) {
+      parseNote(line, start, lineStart = 0) {
         let i = start;
         let octave = 0; // 0=中音, 1=高音, -1=低音
         let accidental = ''; // '', '#', 'b'
@@ -1828,7 +1855,9 @@
               duration: this.calculateDuration(underlines, hasDot),
               underlines: underlines,
               hasDot: hasDot,
-              note: noteLabel
+              note: noteLabel,
+              sourceStart: lineStart + start,
+              sourceEnd: lineStart + i
             },
             nextIndex: i
           };
@@ -1890,13 +1919,15 @@
             hasDot: hasDot,
             isTie: isTie,
             technique: technique,
-            note: noteLabel
+            note: noteLabel,
+            sourceStart: lineStart + start,
+            sourceEnd: lineStart + i
           },
           nextIndex: i
         };
       }
 
-      parseGraceNote(line, start) {
+      parseGraceNote(line, start, lineStart = 0) {
         if (line[start] !== '(') return null;
         let i = start + 1;
         const graceTokens = [];
@@ -1911,6 +1942,7 @@
           // 必须是数字
           if (i >= line.length || !/[1-7]/.test(line[i])) return null;
           const digit = line[i];
+          const noteStart = i;
           i++;
           
           // 后缀（顺序：#b → ^_ → 演奏技法 → / =）
@@ -1946,7 +1978,9 @@
             accidental: accidental,
             underlines: underlines,
             duration: 0.125, // 三十二分音符时值，用于播放
-            technique: technique
+            technique: technique,
+            sourceStart: lineStart + noteStart,
+            sourceEnd: lineStart + i
           });
         }
 
@@ -1973,7 +2007,7 @@
         };
       }
 
-      parseTuplet(line, start) {
+      parseTuplet(line, start, lineStart = 0) {
         // 格式：{N:音符序列}，如 {3:1/ 2/ 3/} 或 {3:1/2/3/}
         const match = line.slice(start).match(/^\{(\d+):/);
         if (!match) return null;
@@ -1993,7 +2027,7 @@
 
           // 音符
           if (/[1-7]/.test(ch) || ch === '^' || ch === '_') {
-            const note = this.parseNote(line, i);
+            const note = this.parseNote(line, i, lineStart);
             tokens.push(note.token);
             i = note.nextIndex;
             continue;
@@ -2001,6 +2035,7 @@
 
           // 休止符 0
           if (ch === '0') {
+            const noteStart = i;
             let hasDot = false;
             let underlines = 0;
             let i2 = i + 1;
@@ -2015,7 +2050,9 @@
               digit: '0',
               duration: this.calculateDuration(underlines, hasDot),
               underlines: underlines,
-              hasDot: hasDot
+              hasDot: hasDot,
+              sourceStart: lineStart + noteStart,
+              sourceEnd: lineStart + i2
             });
             i = i2;
             continue;
@@ -2023,6 +2060,7 @@
 
           // 节拍/鼓点 X
           if (ch === 'X' || ch === 'x') {
+            const noteStart = i;
             let hasDot = false;
             let underlines = 0;
             let isTie = false;
@@ -2041,7 +2079,9 @@
               duration: this.calculateDuration(underlines, hasDot),
               underlines: underlines,
               hasDot: hasDot,
-              isTie: isTie
+              isTie: isTie,
+              sourceStart: lineStart + noteStart,
+              sourceEnd: lineStart + i2
             });
             i = i2;
             continue;
@@ -2267,10 +2307,13 @@
           barlineWidth: 2,
           maxMeasuresPerLine: null,
         };
+        this.clickMap = [];
+        this.lastRenderScale = 1.5;
       }
 
       render(data, options = {}) {
         const { measures, flatMeasures, settings } = data;
+        this.clickMap = [];
         if (measures.length === 0) {
           this.renderEmpty(options);
           return;
@@ -2302,6 +2345,7 @@
         }
 
         const renderScale = options.scale || 1.5;
+        this.lastRenderScale = renderScale;
         const pageInfo = options.pageInfo || null;
 
         const pageHeight = (pageInfo && pageInfo.actualHeight) ? pageInfo.actualHeight : (pageInfo ? A4_HEIGHT : Math.max(totalHeight, 400));
@@ -2581,9 +2625,24 @@
               x: noteX,
               width: noteWidth,
               left: tempX,
-              right: tempX + noteWidth
+              right: tempX + noteWidth,
+              sourceStart: note.sourceStart,
+              sourceEnd: note.sourceEnd
             });
             tempX += noteWidth;
+          }
+
+          // 记录小节级点击映射
+          if (measure.notes.length > 0) {
+            this.clickMap.push({
+              type: 'measure',
+              x: measureStartX,
+              y: y - 30,
+              width: measureWidth,
+              height: 70,
+              sourceStart: measure.sourceStart,
+              sourceEnd: measure.sourceEnd
+            });
           }
 
           // 渲染小节内音符
@@ -2604,6 +2663,18 @@
             }
 
             const group = noteGroups.find(g => g.indices.includes(i));
+            // 记录音符级点击映射
+            if (note.sourceStart !== undefined && note.sourceEnd !== undefined) {
+              this.clickMap.push({
+                type: 'note',
+                x: pos.left,
+                y: y - 28,
+                width: pos.width,
+                height: 60,
+                sourceStart: note.sourceStart,
+                sourceEnd: note.sourceEnd
+              });
+            }
             if (note.type === 'note' || note.type === 'beat') {
               this.renderNote(ctx, note, pos.x, y, group, notePositions, i);
               // 如果前面有倚音，在这里渲染所有连续倚音（依附于当前主音）
@@ -4911,6 +4982,51 @@
       initExportModal();
       initSettingsModal();
     });
+
+    // ===== 点击预览跳转到源码 =====
+    canvas.addEventListener('click', (e) => {
+      if (!renderer.clickMap || renderer.clickMap.length === 0) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const canvasX = (e.clientX - rect.left) * scaleX;
+      const canvasY = (e.clientY - rect.top) * scaleY;
+      const logicalX = canvasX / renderer.lastRenderScale;
+      const logicalY = canvasY / renderer.lastRenderScale;
+
+      let target = null;
+      // 优先匹配音符（更精确）
+      for (const item of renderer.clickMap) {
+        if (item.type === 'note' &&
+            logicalX >= item.x && logicalX <= item.x + item.width &&
+            logicalY >= item.y && logicalY <= item.y + item.height) {
+          target = item;
+          break;
+        }
+      }
+      // 没匹配到音符则匹配小节
+      if (!target) {
+        for (const item of renderer.clickMap) {
+          if (item.type === 'measure' &&
+              logicalX >= item.x && logicalX <= item.x + item.width &&
+              logicalY >= item.y && logicalY <= item.y + item.height) {
+            target = item;
+            break;
+          }
+        }
+      }
+
+      if (target && target.sourceStart !== undefined && target.sourceEnd !== undefined) {
+        editor.focus();
+        editor.setSelectionRange(target.sourceStart, target.sourceEnd);
+        // 临时高亮反馈
+        editor.style.transition = 'box-shadow 0.15s ease';
+        editor.style.boxShadow = 'inset 0 0 0 2px var(--primary)';
+        setTimeout(() => { editor.style.boxShadow = ''; }, 600);
+      }
+    });
+
   </script>
 
   <!-- 导出对话框 -->
