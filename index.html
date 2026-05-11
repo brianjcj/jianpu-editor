@@ -1658,13 +1658,15 @@
             const note = this.parseNote(line, i, lineStart);
             // 检测滑音：起始音 + 滑 + 目标音
             if (note.token.type === 'note' && line.slice(note.nextIndex, note.nextIndex + 1) === '滑') {
-              const target = this.parseNote(line, note.nextIndex + 1);
+              const target = this.parseNote(line, note.nextIndex + 1, lineStart);
               if (target.token.type === 'note') {
                 target.token.slideFrom = {
                   digit: note.token.digit,
                   octave: note.token.octave,
                   accidental: note.token.accidental
                 };
+                // 滑音整体范围：从起始音到目标音末尾
+                target.token.sourceStart = note.token.sourceStart;
                 tokens.push(target.token);
                 i = target.nextIndex;
                 continue;
