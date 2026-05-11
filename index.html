@@ -2759,6 +2759,11 @@
           const note = notes[i];
           const dur = note.duration || 0;
 
+          // 倚音不参与普通音符的连音分组
+          if (note.type === 'grace') {
+            continue;
+          }
+
           if (note.underlines > 0) {
             // 如果连音组兼容性不同，也要断开
             if (currentGroup && !this.isCompatible(currentGroup, note)) {
