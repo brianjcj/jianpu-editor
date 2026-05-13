@@ -2385,6 +2385,12 @@
         this._currentPath.push(`Q${fmt(cx)},${fmt(cy)} ${fmt(x)},${fmt(y)}`);
       }
 
+      closePath() {
+        if (this._currentPath && this._currentPath.length > 0) {
+          this._currentPath.push('Z');
+        }
+      }
+
       stroke() {
         if (!this._currentPath || this._currentPath.length === 0) return;
         const d = this._currentPath.join(' ');
