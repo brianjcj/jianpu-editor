@@ -647,37 +647,51 @@
       display: none !important;
     }
 
-    /* 浮动虚拟键盘 */
+    /* 浮动虚拟键盘 - 固定在右上角，不随页面滚动 */
     .fab-keyboard {
       position: fixed;
       top: 16px;
       right: 16px;
-      z-index: 100;
+      z-index: 9999;
       display: none;
       flex-direction: column;
       align-items: flex-end;
       gap: 8px;
+      pointer-events: none;
+      /* 创建独立合成层，避免被父级 transform / scroll 影响 */
+      will-change: top, right;
+      transform: translateZ(0);
     }
 
     .fab-keyboard.visible {
       display: flex;
     }
 
+    .fab-keyboard > * {
+      pointer-events: auto;
+    }
+
     .fab-btn {
-      width: 48px;
-      height: 48px;
+      width: 52px;
+      height: 52px;
       border-radius: 50%;
       background: var(--primary);
       color: white;
       border: none;
-      font-size: 20px;
+      font-size: 22px;
       cursor: pointer;
-      box-shadow: var(--shadow-3);
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
       display: flex;
       align-items: center;
       justify-content: center;
       transition: all 0.2s ease;
       -webkit-tap-highlight-color: transparent;
+      backdrop-filter: blur(4px);
+    }
+
+    .fab-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
     }
 
     .fab-btn:active {
@@ -690,9 +704,16 @@
       gap: 6px;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 10px;
-      box-shadow: var(--shadow-3);
+      border-radius: 14px;
+      padding: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+      margin-bottom: 4px;
+      /* 限制高度，避免超出可视区域 */
+      max-height: min(320px, calc(100svh - 120px));
+      overflow-y: auto;
+      /* 允许独立滚动，不冒泡到 body */
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
     }
 
     .fab-keys.open {
@@ -703,14 +724,15 @@
       display: flex;
       gap: 6px;
       justify-content: center;
+      flex-wrap: wrap;
     }
 
     .fab-key {
-      min-width: 36px;
-      height: 40px;
-      padding: 0 8px;
+      min-width: 40px;
+      height: 44px;
+      padding: 0 10px;
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 10px;
       background: var(--surface-light);
       color: var(--text);
       font-size: 15px;
@@ -721,12 +743,20 @@
       justify-content: center;
       transition: all 0.15s ease;
       -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    .fab-key:hover {
+      background: var(--primary-container);
+      color: var(--primary);
+      border-color: var(--primary);
     }
 
     .fab-key:active {
       transform: scale(0.92);
-      background: var(--primary-container);
-      color: var(--primary);
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
     }
 
     .fab-key-back {
@@ -1186,6 +1216,9 @@
         <div class="fab-row">
           <button class="fab-key" data-char="挑" title="挑（上拨）">挑</button>
           <button class="fab-key" data-char="滑" title="滑音">滑</button>
+          <button class="fab-key" data-char="(" title="倚音左括号">(</button>
+          <button class="fab-key" data-char=")" title="倚音右括号">)</button>
+          <button class="fab-key fab-key-back" data-char="BACKSPACE" title="退格">⌫</button>
         </div>
       </div>
       <button class="fab-btn" id="fabToggle" title="符号键盘">⌨</button>
@@ -2973,7 +3006,7 @@
         // 单音符的下划线（不在组内的，或组内只有一个音符的）
         if (note.underlines > 0 && (!group || group.indices.length === 1)) {
           ctx.strokeStyle = color;
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 1;
           const lineY = noteY + size * 0.4 + 2;
           const lineWidth = size * 0.567; // 覆盖音符宽度的70%
 
@@ -3372,7 +3405,7 @@
 
       renderGroupBeams(ctx, notes, notePositions, group, y) {
         const size = 20;
-        const underlineHeight = 2;
+        const underlineHeight = 1;
         const lineSpacing = 5;
 
         ctx.strokeStyle = '#1a1a2e';
@@ -3515,7 +3548,7 @@
         // 单音符的下划线（不在组内的，或组内只有一个音符的）
         if (note.underlines > 0 && (!group || group.indices.length === 1)) {
           ctx.strokeStyle = color;
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 1;
           const lineY = y + size * 0.4 + 2;
           const lineWidth = size * 0.486;
 
@@ -4630,9 +4663,10 @@
       e.preventDefault();
     });
 
-    // 只在编辑器获得焦点时显示小圆球
+    // 源码编辑器获得焦点时显示浮动键盘
     editor.addEventListener('focus', () => {
       fabKeyboard.classList.add('visible');
+      syncFabKeyboardPosition();
     });
     editor.addEventListener('blur', () => {
       // 延迟检查，如果焦点不在键盘上则隐藏
@@ -4643,6 +4677,24 @@
         }
       }, 150);
     });
+
+    // 移动端键盘弹出时补偿 layout viewport 滚动，防止 fixed 元素被顶走
+    function syncFabKeyboardPosition() {
+      const vv = window.visualViewport;
+      if (!vv) return;
+      // offsetTop: visual viewport 顶部相对于 layout viewport 顶部的偏移
+      // 当键盘弹出并推动 layout viewport 时，offsetTop > 0，
+      // 需要把 fixed 元素向下拉回同等距离，才能保持在可视区域顶部
+      const top = 16 + vv.offsetTop;
+      fabKeyboard.style.top = top + 'px';
+    }
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', syncFabKeyboardPosition);
+      window.visualViewport.addEventListener('scroll', syncFabKeyboardPosition);
+    }
+    // 不支持 visualViewport 的旧浏览器 fallback
+    window.addEventListener('resize', syncFabKeyboardPosition);
 
     fabToggle.addEventListener('click', (e) => {
       e.preventDefault();
@@ -4675,7 +4727,6 @@
 
       editor.dispatchEvent(new Event('input'));
       editor.focus();
-      fabKeys.classList.remove('open');
     });
 
     // 面板状态 - 与HTML初始状态保持一致
