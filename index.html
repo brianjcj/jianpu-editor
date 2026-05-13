@@ -3007,7 +3007,7 @@
         if (note.underlines > 0 && (!group || group.indices.length === 1)) {
           ctx.strokeStyle = color;
           ctx.lineWidth = 1;
-          const lineY = noteY + size * 0.4 + 2;
+          const lineY = noteY + size * 0.4 + 4;
           const lineWidth = size * 0.567; // 覆盖音符宽度的70%
 
           for (let i = 0; i < note.underlines; i++) {
@@ -3022,7 +3022,7 @@
         if (note.octave < 0) {
           let lowerDotBaseY;
           if (note.underlines > 0) {
-            lowerDotBaseY = noteY + size * 0.4 + 2 + (note.underlines - 1) * 5 + 8;
+            lowerDotBaseY = noteY + size * 0.4 + 4 + (note.underlines - 1) * 5 + 8;
           } else {
             lowerDotBaseY = noteY + size * 0.75;
           }
@@ -3103,11 +3103,11 @@
           const labelSize = 13;
           let labelY = y + size * 0.5 + 3;
           if (note.underlines > 0) {
-            labelY = Math.max(labelY, y + size * 0.4 + 2 + (note.underlines - 1) * 5 + 5);
+            labelY = Math.max(labelY, y + size * 0.4 + 4 + (note.underlines - 1) * 5 + 5);
           }
           if (note.octave < 0) {
             const dotBase = note.underlines > 0
-              ? y + size * 0.4 + 2 + (note.underlines - 1) * 5 + 8
+              ? y + size * 0.4 + 4 + (note.underlines - 1) * 5 + 8
               : y + size * 0.75;
             labelY = Math.max(labelY, dotBase + (Math.abs(note.octave) - 1) * 10 + 8);
           }
@@ -3181,7 +3181,7 @@
         if (note.underlines > 0) {
           ctx.strokeStyle = '#1a1a2e';
           ctx.lineWidth = 1.2;
-          const lineY = graceY + size * 0.4 + 1;
+          const lineY = graceY + size * 0.4 + 2;
           const lineWidth = size * 0.486;
 
           for (let i = 0; i < note.underlines; i++) {
@@ -3196,7 +3196,7 @@
         if (note.octave < 0) {
           let lowerDotBaseY;
           if (note.underlines > 0) {
-            lowerDotBaseY = graceY + size * 0.4 + 1 + (note.underlines - 1) * 3 + 6;
+            lowerDotBaseY = graceY + size * 0.4 + 2 + (note.underlines - 1) * 3 + 6;
           } else {
             lowerDotBaseY = graceY + size * 0.75;
           }
@@ -3283,7 +3283,7 @@
         if (notes.some(n => n.underlines > 0)) {
           ctx.strokeStyle = groupActive ? '#ef4444' : '#1a1a2e';
           ctx.lineWidth = 1.2;
-          const baseLineY = graceY + size * 0.4 + 1;
+          const baseLineY = graceY + size * 0.4 + 2;
           const lineSpacing = 3;
 
           for (let line = 0; line < 3; line++) {
@@ -3318,7 +3318,7 @@
             let xOffset = note.accidental ? size * 0.2 : 0;
             let lowerDotBaseY;
             if (note.underlines > 0) {
-              lowerDotBaseY = graceY + size * 0.4 + 1 + (note.underlines - 1) * 3 + 6;
+              lowerDotBaseY = graceY + size * 0.4 + 2 + (note.underlines - 1) * 3 + 6;
             } else {
               lowerDotBaseY = graceY + size * 0.75;
             }
@@ -3338,7 +3338,7 @@
 
           // 2) 起点在下划线下方，不穿过下划线
           const maxUnderlines = Math.max(...notes.map(n => n.underlines));
-          const baseLineY = graceY + size * 0.4 + 1;
+          const baseLineY = graceY + size * 0.4 + 2;
           const startY = maxUnderlines > 0
             ? baseLineY + (maxUnderlines - 1) * 3 + 4
             : graceY + size * 0.6;
@@ -3419,7 +3419,7 @@
         const firstNote = notes[firstIdx];
 
         // 下划线统一基线，不随高低音偏移
-        const baseLineY = y + size * 0.4 + 2;
+        const baseLineY = y + size * 0.4 + 4;
 
         // 画第一条下划线（所有音符都连）
         // 使用音符宽度，让线覆盖音符宽度的70%
@@ -3549,7 +3549,7 @@
         if (note.underlines > 0 && (!group || group.indices.length === 1)) {
           ctx.strokeStyle = color;
           ctx.lineWidth = 1;
-          const lineY = y + size * 0.4 + 2;
+          const lineY = y + size * 0.4 + 4;
           const lineWidth = size * 0.486;
 
           for (let i = 0; i < note.underlines; i++) {
@@ -3565,7 +3565,7 @@
           const labelSize = 13;
           let labelY = y + size * 0.5 + 3;
           if (note.underlines > 0) {
-            labelY = Math.max(labelY, y + size * 0.4 + 2 + (note.underlines - 1) * 5 + 5);
+            labelY = Math.max(labelY, y + size * 0.4 + 4 + (note.underlines - 1) * 5 + 5);
           }
           ctx.fillStyle = '#64748b';
           ctx.font = `${labelSize}px "Segoe UI", "PingFang SC", sans-serif`;
