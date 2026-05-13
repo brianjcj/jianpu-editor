@@ -317,6 +317,16 @@
     .settings-slider:disabled::-webkit-slider-thumb {
       background: var(--text-muted);
     }
+    /* 隐藏 number input 的上下箭头，避免数字被挤偏 */
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
     .settings-value {
       font-size: 13px;
       font-weight: 600;
@@ -4950,11 +4960,16 @@
         syncLineHeight(e.target.value);
       });
 
-      // 行距数字输入
-      lineHeightNumber.addEventListener('change', (e) => {
-        syncLineHeight(e.target.value);
-      });
+      // 行距数字输入：input 只同步 slider / 显示，不做截断；change / blur 时才截断
       lineHeightNumber.addEventListener('input', (e) => {
+        const raw = e.target.value;
+        const val = parseInt(raw);
+        if (!isNaN(val) && raw.trim() !== '') {
+          lineHeightSlider.value = val;
+          lineHeightValue.textContent = val + 'px';
+        }
+      });
+      lineHeightNumber.addEventListener('change', (e) => {
         syncLineHeight(e.target.value);
       });
 
@@ -4973,13 +4988,17 @@
         }
       });
 
-      // 小节数数字输入
-      maxMeasuresNumber.addEventListener('change', (e) => {
-        if (enableMaxMeasures.checked) {
-          syncMaxMeasures(e.target.value);
+      // 小节数数字输入：input 只同步 slider / 显示，不做截断；change / blur 时才截断
+      maxMeasuresNumber.addEventListener('input', (e) => {
+        if (!enableMaxMeasures.checked) return;
+        const raw = e.target.value;
+        const val = parseInt(raw);
+        if (!isNaN(val) && raw.trim() !== '') {
+          maxMeasuresSlider.value = val;
+          maxMeasuresValue.textContent = val;
         }
       });
-      maxMeasuresNumber.addEventListener('input', (e) => {
+      maxMeasuresNumber.addEventListener('change', (e) => {
         if (enableMaxMeasures.checked) {
           syncMaxMeasures(e.target.value);
         }
