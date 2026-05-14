@@ -1183,7 +1183,8 @@
           <tr><td><code>{3:1/ 2/ 3/}</code></td><td>三连音（N连音通用，如 {5:...}）</td></tr>
           <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
           <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
-          <tr><td><code>|:</code></td><td>前反复号（从此处开始反复）</td></tr>
+          <tr><td><code>$1_ 4_ 1 4</code></td><td>空弦音设置（乐器各弦空弦音高）</td></tr>
+          <tr><td><code>|</code></td><td>前反复号（从此处开始反复）</td></tr>
           <tr><td><code>:|</code></td><td>后反复号（反复回开头或前反复号）</td></tr>
           <tr><td><code>[1 ... ]</code></td><td>跳房子（第1房子，支持 [2] [3]）</td></tr>
           <tr><td><code>DC</code></td><td>从头反复（Da Capo）</td></tr>
@@ -1268,7 +1269,8 @@
               <tr><td><code>{3:1/ 2/ 3/}</code></td><td>三连音（N连音通用，如 {5:...}）</td></tr>
               <tr><td><code>%C=4/4</code></td><td>拍号设置（C调 4/4拍）</td></tr>
               <tr><td><code>@120</code></td><td>速度设置（BPM）</td></tr>
-              <tr><td><code>|:</code></td><td>前反复号（从此处开始反复）</td></tr>
+              <tr><td><code>$1_ 4_ 1 4</code></td><td>空弦音设置（乐器各弦空弦音高）</td></tr>
+              <tr><td><code>|</code></td><td>前反复号（从此处开始反复）</td></tr>
               <tr><td><code>:|</code></td><td>后反复号（反复回开头或前反复号）</td></tr>
               <tr><td><code>[1 ... ]</code></td><td>跳房子（第1房子，支持 [2] [3]）</td></tr>
               <tr><td><code>DC</code></td><td>从头反复（Da Capo）</td></tr>
@@ -1413,6 +1415,21 @@
               globalSettings.key = match[1];
               if (match[2]) globalSettings.timeSignature[0] = parseInt(match[2]);
               if (match[3]) globalSettings.timeSignature[1] = parseInt(match[3]);
+            }
+            globalOffset += rawLine.length + 1;
+            continue;
+          }
+
+          // 空弦音设置
+          if (line.startsWith('$')) {
+            const str = line.slice(1).trim();
+            if (str) {
+              const tokens = this.tokenize(str, globalOffset + 1);
+              globalSettings.openStrings = tokens.filter(t => t.type === 'note').map(t => ({
+                digit: t.digit,
+                octave: t.octave,
+                accidental: t.accidental
+              }));
             }
             globalOffset += rawLine.length + 1;
             continue;
@@ -2439,6 +2456,19 @@
         this.lastRenderScale = 1.5;
       }
 
+      formatOpenStrings(settings) {
+        if (!settings.openStrings || settings.openStrings.length === 0) return '';
+        const parts = settings.openStrings.map(n => {
+          let s = n.digit;
+          if (n.accidental === '#') s += '#';
+          else if (n.accidental === 'b') s += 'b';
+          if (n.octave > 0) s += '^'.repeat(n.octave);
+          else if (n.octave < 0) s += '_'.repeat(Math.abs(n.octave));
+          return s;
+        });
+        return '空弦: ' + parts.join('  ');
+      }
+
       render(data, options = {}) {
         const { measures, flatMeasures, settings } = data;
         this.clickMap = [];
@@ -2506,6 +2536,11 @@
           ctx.textAlign = 'left';
           const keyText = `${settings.key}大调  ${settings.timeSignature[0]}/${settings.timeSignature[1]}拍  ♩=${settings.bpm}`;
           ctx.fillText(keyText, MARGIN_X, y);
+          const osText = this.formatOpenStrings(settings);
+          if (osText) {
+            y += 14;
+            ctx.fillText(osText, MARGIN_X, y);
+          }
           y += lineHeight * 0.75;
         } else {
           y = MARGIN_Y;
@@ -4229,6 +4264,11 @@
           svgCtx.textAlign = 'left';
           const keyText = `${settings.key}大调  ${settings.timeSignature[0]}/${settings.timeSignature[1]}拍  ♩=${settings.bpm}`;
           svgCtx.fillText(keyText, MARGIN_X, y);
+          const osText = this.formatOpenStrings(settings);
+          if (osText) {
+            y += 14;
+            svgCtx.fillText(osText, MARGIN_X, y);
+          }
           y += lineHeight * 0.75;
         } else {
           y = MARGIN_Y;
@@ -4831,6 +4871,7 @@
       const example = `!小星星
 %C=4/4
 @100
+$1_ 4_ 1 4
 
 框(1 1 5 5) | 框(6 6 5) - | 4 4 3 3 | 2 2 1 - |
 5 5 4 4 | 3 3 2 - | 5 5 4 4 | 3 3 2 - |
