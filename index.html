@@ -4200,12 +4200,70 @@
             }
           }
 
-          const padXLeft = -3;
-          const padXRight = -8;
+          // 精确计算框的水平范围，基于音符真实视觉边界，并在密集时避免覆盖相邻非框音符
+          const getNoteLeftExtent = (note) => {
+            let ext = size * 0.35; // 数字半宽（20px bold 数字实际渲染宽约 11–14px）
+            if (note.accidental) {
+              // 升降号中心在 x - size*0.5，字体 size*0.7，半宽约 size*0.25
+              ext = Math.max(ext, size * 0.5 + size * 0.25);
+            }
+            if (note.slideFrom) {
+              const slideSize = 13;
+              let slideExt = slideSize * 0.35;
+              if (note.slideFrom.accidental) {
+                slideExt = Math.max(slideExt, slideSize * 0.5 + slideSize * 0.25);
+              }
+              const xOffset = note.accidental ? size * 0.2 : 0;
+              // 滑音中心在 x + xOffset - 6
+              ext = Math.max(ext, 6 - xOffset + slideExt);
+            }
+            return ext;
+          };
+
+          const getNoteRightExtent = (note) => {
+            let ext = size * 0.35;
+            if (note.hasDot) {
+              const xOffset = note.accidental ? size * 0.2 : 0;
+              // 附点中心在 x + size*0.5 + xOffset，半径 2
+              ext = Math.max(ext, size * 0.5 + xOffset + 2);
+            }
+            return ext;
+          };
+
+          const firstNote = group[0].note;
+          const lastNote = group[group.length - 1].note;
+          const firstIdx = group[0].index;
+          const lastIdx = group[group.length - 1].index;
+          const gap = 2; // 框与相邻非框音符之间的最小留白
+          const padX = 3;
+
+          let boxLeft = firstPos.x - getNoteLeftExtent(firstNote) - padX;
+          // 如果前面有非框音符，框左边界不侵入它的视觉区域
+          if (firstIdx > 0) {
+            const prevNote = measure.notes[firstIdx - 1];
+            const prevPos = notePositions[firstIdx - 1];
+            boxLeft = Math.max(boxLeft, prevPos.x + getNoteRightExtent(prevNote) + gap);
+          }
+
+          let boxRight = lastPos.x + getNoteRightExtent(lastNote) + padX;
+          // 如果后面有非框音符，框右边界不侵入它的视觉区域
+          if (lastIdx < measure.notes.length - 1) {
+            const nextNote = measure.notes[lastIdx + 1];
+            const nextPos = notePositions[lastIdx + 1];
+            boxRight = Math.min(boxRight, nextPos.x - getNoteLeftExtent(nextNote) - gap);
+          }
+
+          let boxX = boxLeft;
+          let boxW = boxRight - boxLeft;
+          if (boxW < 4) {
+            // 极端密集导致空间不足，以框内音符跨度中心为基准画最小框
+            const center = (firstPos.x + lastPos.x) / 2;
+            boxW = 6;
+            boxX = center - boxW / 2;
+          }
+
           const padY = 4;
-          const boxX = firstPos.left - padXLeft;
           const boxY = topY - padY;
-          const boxW = lastPos.right - firstPos.left + padXLeft + padXRight;
           const boxH = bottomY - topY + padY * 2;
 
           this.drawHandDrawnBox(ctx, boxX, boxY, boxW, boxH, boxId);
