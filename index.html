@@ -2492,7 +2492,7 @@
 
         // "1=C"
         ctx.fillText(keyStr, currentX, y);
-        currentX += this._textWidth(ctx, keyStr);
+        currentX += this._textWidth(ctx, keyStr) + 2;
 
         if (hasOpenStrings) {
           ctx.fillText(' (', currentX, y);
