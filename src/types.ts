@@ -147,7 +147,7 @@ export interface RenderOptions {
 
 export interface PageInfo {
   pageIndex: number;
-  actualHeight: number;
+  actualHeight?: number;
   lineIndices?: number[];
   totalPages?: number;
 }
