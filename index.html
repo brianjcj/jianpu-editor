@@ -83,7 +83,9 @@
           </span>
         </div>
       </div>
-      <textarea class="editor" id="editor" placeholder="在此输入简谱...
+      <div class="editor-wrapper">
+        <pre class="editor-highlight" id="editorHighlight" aria-hidden="true"><code></code></pre>
+        <textarea class="editor" id="editor" placeholder="在此输入简谱...
 
 试试输入示例：
 |: 1 2 3 4 | 5 6 5 3 :| [1 2 - - |] [2 3 - - ||]
@@ -91,6 +93,7 @@
 
 反复标记：|:  :|  [1 ]  [2 ]  DC  DS  Fine
 点击右侧「示例」按钮加载完整demo"></textarea>
+      </div>
       <div class="syntax-help panel-hidden">
         <div class="syntax-help-header">
           <h4>标记语法速查</h4>

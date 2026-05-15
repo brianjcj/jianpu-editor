@@ -7,6 +7,7 @@ import { initPanels } from './ui/panels';
 import { initVirtualKeyboard } from './ui/keyboard';
 import { initExportModal, initSettingsModal } from './ui/modals';
 import { initEditorSync } from './editor/sync';
+import { initHighlightSync } from './editor/highlighter';
 
 declare global {
   interface Window {
@@ -179,6 +180,11 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
 initPanels({ onRender: renderCached });
 initVirtualKeyboard({ editor });
 initEditorSync({ canvas, renderer, editor });
+initHighlightSync({
+  editor,
+  highlightEl: document.getElementById('editorHighlight') as HTMLPreElement,
+  codeEl: document.querySelector('#editorHighlight code') as HTMLElement,
+});
 initExportModal({ parser, renderer, canvas, ctx, editor });
 initSettingsModal({ applySettings: applySettingsToRenderer, onRender: renderCached });
 

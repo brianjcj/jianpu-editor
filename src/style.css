@@ -543,22 +543,74 @@
       align-items: center;
     }
 
-    .editor {
+    /* ===== Editor Wrapper & Syntax Highlight ===== */
+    .editor-wrapper {
+      position: relative;
       flex: 1;
-      background: var(--editor-bg);
-      color: var(--text);
+      overflow: hidden;
+    }
+
+    .editor,
+    .editor-highlight {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 16px;
+      border: none;
       font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
       font-size: 15px;
       line-height: 1.6;
-      padding: 16px;
-      border: none;
-      outline: none;
-      resize: none;
       tab-size: 2;
+      overflow: auto;
+      white-space: pre;
+      word-wrap: normal;
+    }
+
+    .editor {
+      z-index: 2;
+      background: transparent;
+      color: transparent;
+      caret-color: var(--text);
+      resize: none;
+      outline: none;
     }
 
     .editor::placeholder {
       color: #4a6fa5;
+      opacity: 1;
+    }
+
+    .editor-highlight {
+      z-index: 1;
+      pointer-events: none;
+      background: var(--editor-bg);
+      color: transparent;
+    }
+
+    .editor-highlight code {
+      display: block;
+    }
+
+    /* 语法高亮颜色 */
+    .hl-digit     { color: #1a1a2e; font-weight: bold; }
+    .hl-octave    { color: #6366f1; }
+    .hl-accidental{ color: #ec4899; }
+    .hl-dot       { color: #f59e0b; }
+    .hl-barline   { color: #06b6d4; font-weight: bold; }
+    .hl-command   { color: #8b5cf6; font-weight: bold; }
+    .hl-comment   { color: #94a3b8; font-style: italic; }
+    .hl-keyword   { color: #475569; font-weight: 600; }
+    .hl-technique { color: #ef4444; }
+
+    @media (max-width: 768px) {
+      .editor,
+      .editor-highlight {
+        padding: 10px;
+        font-size: 15px;
+      }
     }
 
     /* Syntax legend */
