@@ -1,7 +1,7 @@
 // @ts-nocheck
 import './style.css';
 import JSZip from 'jszip';
-import { state, appConfig, loadSettings, editor, status, canvasContainer } from './state';
+import { state, appConfig, loadSettings, editor, status, canvasContainer, cache } from './state';
 
 let canvas = document.getElementById('jianpuCanvas') as HTMLCanvasElement;
 let ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -18,20 +18,32 @@ function applySettingsToRenderer() {
   renderer.config.maxMeasuresPerLine = appConfig.maxMeasuresPerLine;
 }
 
-// 渲染函数
-function render() {
+// 解析并渲染（文本变化时调用）
+function parseAndRender() {
   const text = editor.value;
-  const data = parser.parse(text);
-  renderer.render(data);
+  cache.parseResult = parser.parse(text);
+  renderer.render(cache.parseResult);
 }
-// player.ts 在模块外调用全局 render，需挂载到 window
-(window as any).render = render;
+// 使用缓存直接重绘（播放进度更新等高频场景调用）
+function renderCached() {
+  if (cache.parseResult) {
+    renderer.render(cache.parseResult);
+  } else {
+    parseAndRender();
+  }
+}
+// player.ts 在模块外调用全局 render，挂载缓存版本
+(window as any).render = renderCached;
 
-// 事件监听
+// 事件监听（输入防抖 150ms，避免快速输入时连续重绘）
+let inputDebounceTimer: ReturnType<typeof setTimeout>;
 editor.addEventListener('input', () => {
-  render();
-  // 保存到 localStorage
-  localStorage.setItem('jianpu_editor_content', editor.value);
+  clearTimeout(inputDebounceTimer);
+  inputDebounceTimer = setTimeout(() => {
+    parseAndRender();
+    // 保存到 localStorage
+    localStorage.setItem('jianpu_editor_content', editor.value);
+  }, 150);
 });
 
 // 播放按钮
@@ -567,11 +579,11 @@ if (saved) {
 }
 
 // 初始渲染
-render();
+parseAndRender();
 
-// 窗口大小变化
+// 窗口大小变化（内容未变，直接用缓存重绘）
 window.addEventListener('resize', () => {
-  render();
+  renderCached();
 });
 
 // 导出对话框初始化（DOM 已就绪后绑定）

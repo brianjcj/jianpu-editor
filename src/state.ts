@@ -38,3 +38,7 @@ export function loadSettings() {
 export const editor = document.getElementById('editor') as HTMLTextAreaElement;
 export const status = document.getElementById('status') as HTMLDivElement;
 export const canvasContainer = document.getElementById('canvasContainer') as HTMLDivElement;
+
+export const cache = {
+  parseResult: null as import('./types').ParseResult | null,
+};

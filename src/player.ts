@@ -13,6 +13,7 @@ export class JianPuPlayer {
   totalDuration: number;
   playbackOffset: number;
   _cleanupTimer: ReturnType<typeof setTimeout> | null;
+  _progressTimer: ReturnType<typeof setInterval> | null;
   silentAudio: HTMLAudioElement;
   streamDest: MediaStreamAudioDestinationNode | null;
   keeperOsc: OscillatorNode | null;
@@ -27,6 +28,7 @@ export class JianPuPlayer {
     this.totalDuration = 0;
     this.playbackOffset = 0;
     this._cleanupTimer = null;
+    this._progressTimer = null;
     // 隐藏音频元素，用于维持 iOS 后台媒体会话，防止熄屏后 AudioContext 被挂起
     this.silentAudio = new Audio();
     this.silentAudio.loop = true;
@@ -171,23 +173,32 @@ export class JianPuPlayer {
 
   updateProgress(totalDuration: number) {
     const progressBar = document.getElementById('playbackProgress');
-    const update = () => {
-      if (!this.isPlaying || !this.audioCtx) return;
+    // 100ms 间隔更新进度条和重绘，比 RAF (60fps) 减少 6 倍绘制开销
+    this._progressTimer = setInterval(() => {
+      if (!this.isPlaying || !this.audioCtx) {
+        this._clearProgressTimer();
+        return;
+      }
       const elapsed = this.audioCtx.currentTime - state.playbackStartTime;
       state.playbackCurrentTime = elapsed;
       const progress = Math.min((elapsed / totalDuration) * 100, 100);
       progressBar.style.width = progress + '%';
 
-      render(); // 重绘以更新高亮
+      render(); // 重绘以更新高亮（main.ts 已挂载缓存版本）
 
       if (progress >= 100) {
+        this._clearProgressTimer();
         this.stop(false, true, true);
         this._resetPlayButton();
-        return;
       }
-      requestAnimationFrame(update);
-    };
-    requestAnimationFrame(update);
+    }, 100);
+  }
+
+  _clearProgressTimer() {
+    if (this._progressTimer) {
+      clearInterval(this._progressTimer);
+      this._progressTimer = null;
+    }
   }
 
   _resetPlayButton() {
@@ -217,6 +228,7 @@ export class JianPuPlayer {
       clearTimeout(this._cleanupTimer);
       this._cleanupTimer = null;
     }
+    this._clearProgressTimer();
 
     if (immediate) {
       // 立即强制停止（play() 开头调用，清理旧资源）
