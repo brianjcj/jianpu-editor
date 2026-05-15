@@ -180,7 +180,7 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
 initPanels({ onRender: renderCached });
 initVirtualKeyboard({ editor });
 initEditorSync({ canvas, renderer, editor });
-initHighlightSync({
+const highlightSync = initHighlightSync({
   editor,
   highlightEl: document.getElementById('editorHighlight') as HTMLPreElement,
   codeEl: document.querySelector('#editorHighlight code') as HTMLElement,
@@ -196,6 +196,7 @@ applySettingsToRenderer();
 const saved = localStorage.getItem('jianpu_editor_content');
 if (saved) {
   editor.value = saved;
+  highlightSync.update();
 }
 
 // 初始渲染

@@ -165,4 +165,6 @@ export function initHighlightSync(options: {
     highlightEl.scrollTop = editor.scrollTop;
     highlightEl.scrollLeft = editor.scrollLeft;
   });
+
+  return { update };
 }
