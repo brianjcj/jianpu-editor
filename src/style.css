@@ -567,8 +567,8 @@
       line-height: 1.6;
       tab-size: 2;
       overflow: auto;
-      white-space: pre;
-      word-wrap: normal;
+      white-space: pre-wrap;
+      word-wrap: break-word;
     }
 
     .editor {

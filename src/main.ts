@@ -100,20 +100,7 @@ document.getElementById('btnPrint')!.addEventListener('click', () => {
   window.print();
 });
 
-// 示例按钮
-document.getElementById('btnExample')!.addEventListener('click', () => {
-  const example = `!小星星
-%C=4/4
-@100
-$1_ 5_ 1 5
-
-框(1 1 5 5) | 框(6 6 5) - | 4 4 3 3 | 2 2 1 - |
-5 5 4 4 | 3 3 2 - | 5 5 4 4 | 3 3 2 - |
-1 1 5 5 | 6 6 5 - | 4 4 3 3 | 2 2 1 - ||`;
-  editor.value = example;
-  parseAndRender();
-  status.innerHTML = '<span class="status-dot"></span>已加载：小星星';
-});
+// 示例按钮（逻辑在 highlightSync 初始化后绑定，见下方）
 
 // 复制源码按钮
 document.getElementById('btnCopy')!.addEventListener('click', async () => {
@@ -187,6 +174,22 @@ const highlightSync = initHighlightSync({
 });
 initExportModal({ parser, renderer, canvas, ctx, editor });
 initSettingsModal({ applySettings: applySettingsToRenderer, onRender: renderCached });
+
+// 示例按钮
+document.getElementById('btnExample')!.addEventListener('click', () => {
+  const example = `!小星星
+%C=4/4
+@100
+$1_ 5_ 1 5
+
+框(1 1 5 5) | 框(6 6 5) - | 4 4 3 3 | 2 2 1 - |
+5 5 4 4 | 3 3 2 - | 5 5 4 4 | 3 3 2 - |
+1 1 5 5 | 6 6 5 - | 4 4 3 3 | 2 2 1 - ||`;
+  editor.value = example;
+  highlightSync.update();
+  parseAndRender();
+  status.innerHTML = '<span class="status-dot"></span>已加载：小星星';
+});
 
 // 恢复设置
 loadSettings();
