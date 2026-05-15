@@ -138,7 +138,19 @@ export class SVGContext {
     this._currentPath += `C ${fmt(cp1x)} ${fmt(cp1y)} ${fmt(cp2x)} ${fmt(cp2y)} ${fmt(x)} ${fmt(y)} `;
   }
   arc(x: number, y: number, r: number, sAngle: number, eAngle: number) {
-    const largeArc = Math.abs(eAngle - sAngle) > Math.PI ? 1 : 0;
+    const delta = Math.abs(eAngle - sAngle);
+    // 完整圆：SVG 的 A 命令在起点终点重合时无法渲染，需拆成两个半圆
+    if (delta >= Math.PI * 2 - 0.0001) {
+      const x1 = x + r * Math.cos(sAngle);
+      const y1 = y + r * Math.sin(sAngle);
+      const xm = x + r * Math.cos(sAngle + Math.PI);
+      const ym = y + r * Math.sin(sAngle + Math.PI);
+      const x2 = x + r * Math.cos(eAngle);
+      const y2 = y + r * Math.sin(eAngle);
+      this._currentPath += `M ${fmt(x1)} ${fmt(y1)} A ${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(xm)} ${fmt(ym)} A ${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(x2)} ${fmt(y2)} `;
+      return;
+    }
+    const largeArc = delta > Math.PI ? 1 : 0;
     const sweep = eAngle > sAngle ? 1 : 0;
     const x1 = x + r * Math.cos(sAngle);
     const y1 = y + r * Math.sin(sAngle);
