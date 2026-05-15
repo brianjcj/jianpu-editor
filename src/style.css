@@ -574,7 +574,8 @@
     .editor {
       z-index: 2;
       background: transparent;
-      color: rgba(0, 0, 0, 0.01);
+      color: var(--text);
+      -webkit-text-fill-color: transparent;
       caret-color: var(--text);
       resize: none;
       outline: none;
